@@ -78,19 +78,22 @@ python3 python/observe_titan.py "Seed" [steps]
 - **Standardized API paths**: Removed `/lattice/` prefix from scripts to match the actual engine routes.
 - **Improved Evolution Efficiency**: Added a `steps` parameter to the `/api/v1/formatted` endpoint, allowing multi-step evolution and state retrieval in a single round-trip.
 - **Unified Parameter Support**: The engine now correctly handles `seed_prompt` as an alias for `seed` in the JSON payload, ensuring compatibility with all legacy and new scripts.
-- **Visual Clarity**: Default CLI dimensions increased to 120x60 for more immersive chaotic patterns.
-
-## Future Research & Structural Ideation
+## Insights & Creative Theory
 
 ### Analysis of Large-Scale Evolution
-Recent tests on 200x80 grids with 50+ iterations show that while the initial seed determines the starting "galaxy" of points, long-term evolution results in "Semantic Diffusion." The original prompt bytes act as a phase-offset seed that diffuses into complex filament structures and diagonal interference patterns.
+Recent tests on 200x80 grids with 50+ iterations show that while the initial seed determines the starting "galaxy" of points, long-term evolution results in **Semantic Diffusion**. The original prompt bytes act as a phase-offset seed that diffuses into complex filament structures and diagonal interference patterns.
+- **Emergent Topology:** Large grids allow for long-range dependencies—voids and clusters that mirror natural landscapes.
+- **Scale Stability:** The Hilbert space math remains stable at high resolutions, making it viable for procedural world-building or high-fidelity generative art.
 
-### Structurally Effective Injection
-Currently, the prompt is injected only at initialization. To increase structural resilience:
+### Roadmap: Structurally Effective Injection
+Currently, the prompt is injected only at initialization. To increase structural resilience, future versions could explore:
 - **Persistent Modulation:** Instead of one-time seeding, the prompt could be converted into a constant "modulation field" (similar to the Titan feedback) that influences the Hilbert space at every step. This would make the prompt act as a "force" rather than just a "starting state."
-- **Fractal Folding:** Mapping prompt bytes to a recursive geometric structure (like a Sierpinski triangle) within the grid could make the information more resilient to entropic decay.
-- **Topological Prompting:** Letting the prompt define the grid's wrap-around logic (e.g., torus vs. sphere) would fundamentally change the system's structural evolution.
+- **Fractal Folding:** Mapping prompt bytes to a recursive geometric structure (like a Sierpinski triangle) within the grid to make the information more resilient to entropic decay.
+- **Topological Prompting:** Letting the prompt define the grid's wrap-around logic (e.g., torus vs. sphere) to fundamentally change the system's structural evolution.
 
 ### Creative Applications
 - **Procedural World-Building:** Using large grids (200x80+) as "territory maps" where focal points represent semantic hubs or landmarks.
 - **Sonic Mapping:** Mapping the complex probability fields of high-iteration runs into audio spectral filters for generative music.
+
+## Bug Fixes & Improvements
+
