@@ -2,3 +2,4 @@ engine/target/
 __pycache__/
 *.pyc
 .gemini/
+venv/
