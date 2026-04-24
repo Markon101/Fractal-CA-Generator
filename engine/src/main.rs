@@ -45,17 +45,39 @@ impl LatticeState {
     fn new(width: usize, height: usize, prompt: &str) -> Self {
         let mut grid = vec![vec![Cell::new(); width]; height];
         let bytes = prompt.as_bytes();
+        
         if bytes.is_empty() {
             grid[height/2][width/2].u_re = 1.0;
         } else {
+            // FRACTAL FOLDING: Inject bytes into a Sierpinski-like structure
             for (i, &b) in bytes.iter().enumerate() {
-                let x = (i * 7 + (b as usize) * 3) % width;
-                let y = (i * 5 + (b as usize) * 11) % height;
-                let phase = (b as f32) / 255.0 * std::f32::consts::TAU;
-                grid[y][x].u_re = phase.cos() * 0.5;
-                grid[y][x].u_im = phase.sin() * 0.5;
-                grid[y][x].d_re = phase.cos() * 0.5;
-                grid[y][x].d_im = -phase.sin() * 0.5;
+                // Find coordinates that fit a recursive bitwise pattern
+                let mut found = false;
+                for attempt in 0..100 {
+                    let idx = (i * 13 + attempt * 7) % (width * height);
+                    let x = idx % width;
+                    let y = idx / width;
+                    
+                    // Simple bitwise check for "fractal-like" distribution (Sierpinski carpet/gasket variant)
+                    if (x & y) == 0 || (x | y) % 3 == 0 {
+                        let phase = (b as f32) / 255.0 * std::f32::consts::TAU;
+                        grid[y][x].u_re = phase.cos() * 0.7;
+                        grid[y][x].u_im = phase.sin() * 0.7;
+                        grid[y][x].d_re = phase.cos() * 0.3;
+                        grid[y][x].d_im = -phase.sin() * 0.3;
+                        found = true;
+                        break;
+                    }
+                }
+                
+                // Fallback if no fractal point found (unlikely but safe)
+                if !found {
+                    let x = (i * 7 + (b as usize) * 3) % width;
+                    let y = (i * 5 + (b as usize) * 11) % height;
+                    let phase = (b as f32) / 255.0 * std::f32::consts::TAU;
+                    grid[y][x].u_re = phase.cos() * 0.5;
+                    grid[y][x].u_im = phase.sin() * 0.5;
+                }
             }
         }
 
