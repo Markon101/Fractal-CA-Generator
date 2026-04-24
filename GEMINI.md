@@ -32,6 +32,7 @@ The server runs on `http://localhost:3000`.
 - `/api/v1/step` (POST): Accepts an optional `count` parameter to run multiple steps.
 
 ### Python Scripts
+All Python scripts now include a shared utility (`engine_utils.py`) that automatically detects if the Rust engine is running. If the engine is not found on port 3000, the scripts will attempt to start it automatically using `cargo run --release`.
 
 #### Chaos Agent
 The `chaos_agent.py` script performs semantic analysis on the evolved CA state.

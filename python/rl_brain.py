@@ -1,6 +1,8 @@
 import requests
 import json
 import sys
+import time
+from engine_utils import ensure_engine_running
 
 # Attempt to load torch, but allow fallback for scaffolding tests
 try:
@@ -19,10 +21,14 @@ class TitanMemoryMock:
 def run_scaffold_test(duration=0):
     print("### FRACTAL CA-TOKEN BRAIN TEST ###")
     
+    if not ensure_engine_running():
+        print("Error: Engine unavailable.")
+        return
+
     init_data = {
         "width": 60,
         "height": 30,
-        "seed_prompt": "Continuous evolution test at 60Hz semantic density.",
+        "seed": "Continuous evolution test at 60Hz semantic density.",
         "instruction_header": "## SYSTEM DIRECTIVE: CONTINUOUS FRACTAL ANALYSIS"
     }
     
@@ -52,7 +58,6 @@ def run_scaffold_test(duration=0):
         print(f"Test failed: {e}")
 
 if __name__ == "__main__":
-    import time
     dur = 0
     if len(sys.argv) > 1:
         dur = int(sys.argv[1])

@@ -2,6 +2,7 @@ import requests
 import numpy as np
 import sys
 import time
+from engine_utils import ensure_engine_running
 
 class TitanPredictor:
     def __init__(self, latents_path):
@@ -15,6 +16,10 @@ class TitanPredictor:
 def run_observation(width, h, steps, seed):
     print(f"### TITAN OBSERVATION RUN: {width}x{h} ###")
     
+    if not ensure_engine_running():
+        print("Error: Engine unavailable.")
+        return
+
     predictor = None
     try:
         predictor = TitanPredictor("titan_latents.npz")

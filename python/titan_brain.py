@@ -2,6 +2,7 @@ import requests
 import numpy as np
 import sys
 import time
+from engine_utils import ensure_engine_running
 
 class TitanMemory:
     """A simplified Neural Memory (Titans architecture) that learns in real-time."""
@@ -29,6 +30,11 @@ class TitanMemory:
 
 def run_titan_loop(width, height, steps, seed):
     print(f"### TITAN NEURAL MEMORY RUN: {width}x{height} | {steps} Steps ###")
+    
+    if not ensure_engine_running():
+        print("Error: Engine unavailable.")
+        return
+
     size = width * height
     titan = TitanMemory(size)
     

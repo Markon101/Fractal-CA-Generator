@@ -1,8 +1,11 @@
 import requests
 import sys
 import time
+from engine_utils import ensure_engine_running
 
 def get_grid(prompt):
+    if not ensure_engine_running(): return ""
+    
     requests.post("http://localhost:3000/api/v1/init", json={
         "width": 40,
         "height": 20,
@@ -15,6 +18,10 @@ def get_grid(prompt):
 def run_lab():
     print("### CHAOS LABORATORY: PHASE TRANSITION ANALYSIS ###")
     
+    if not ensure_engine_running():
+        print("Error: Engine unavailable.")
+        return
+
     # 1. Determinism Test
     print("\n[Test 1: Determinism]")
     p1 = "Alpha" # len 5

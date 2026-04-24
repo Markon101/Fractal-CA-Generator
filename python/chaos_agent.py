@@ -3,9 +3,14 @@ import json
 import sys
 import time
 import argparse
+from engine_utils import ensure_engine_running
 
 def generate_chaos_map(prompt, iterations=20, width=80, height=40):
     """Initializes the Rust CA engine and evolves it to get a mature chaotic map."""
+    if not ensure_engine_running():
+        print("Error: Could not connect to or start the CA Engine.")
+        return None
+
     init_data = {
         "width": width,
         "height": height,

@@ -2,11 +2,16 @@ import requests
 import json
 import sys
 import time
+from engine_utils import ensure_engine_running
 
 def run_deep_time():
     prompt = "Europa Orbital Research Station: Thousand Year Legacy"
     print(f"### DEEP TIME EVOLUTION: {prompt} ###\n")
     
+    if not ensure_engine_running():
+        print("Error: Engine unavailable.")
+        return
+
     # Init
     requests.post("http://localhost:3000/api/v1/init", json={
         "width": 80,
