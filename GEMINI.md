@@ -78,18 +78,21 @@ python3 python/observe_titan.py "Seed" [steps]
 - **Standardized API paths**: Removed `/lattice/` prefix from scripts to match the actual engine routes.
 - **Improved Evolution Efficiency**: Added a `steps` parameter to the `/api/v1/formatted` endpoint, allowing multi-step evolution and state retrieval in a single round-trip.
 - **Unified Parameter Support**: The engine now correctly handles `seed_prompt` as an alias for `seed` in the JSON payload, ensuring compatibility with all legacy and new scripts.
-## Insights & Creative Theory
+### Research Synthesis (April 2026)
+Recent research validates the core pillars of the Fractal CA project:
+- **Titan Alignment**: Our "Titan" feedback loop mirrors the "Titans: Learning to Memorize at Test Time" (ArXiv: 2501.00663) paradigm, which uses weight-updates during inference as a long-term memory module.
+- **Reservoir Computing (ReCA)**: The CA grid acts as a high-dimensional reservoir for state persistence, a recognized technique for mapping signals into complex non-linear spaces.
+- **Information Thermalization**: The observed entropy peaks (~11.0) confirm that 30 iterations push the system toward thermalization, necessitating observation in the "Pre-Thermalization window" (5-15 steps) to maintain prompt "vibes."
+- **Fractal Globule Packing**: The project's "Fractal Folding" goal is supported by the Fractal Globule model (Science 326), which enables dense information packing while preserving locality.
 
-### Analysis of Large-Scale Evolution
-Recent tests on 200x80 grids with 50+ iterations show that while the initial seed determines the starting "galaxy" of points, long-term evolution results in **Semantic Diffusion**. The original prompt bytes act as a phase-offset seed that diffuses into complex filament structures and diagonal interference patterns.
-- **Emergent Topology:** Large grids allow for long-range dependencies—voids and clusters that mirror natural landscapes.
-- **Scale Stability:** The Hilbert space math remains stable at high resolutions, making it viable for procedural world-building or high-fidelity generative art.
+*For detailed research citations and analysis, see [THEORETICAL_FOUNDATIONS.md](THEORETICAL_FOUNDATIONS.md).*
 
-### Roadmap: Structurally Effective Injection
-Currently, the prompt is injected only at initialization. To increase structural resilience, future versions could explore:
+### Roadmap: Research-Driven Evolution
+- **Fractal Globule Injection**: Implement a Hilbert-curve based folding algorithm in the Rust engine to maximize semantic locality.
+- **Surprise-Based Titan Updates**: Refine the Titan brain feedback to use gradient-based "Surprise Metrics" for selecting CA states to memorize.
+- **Pre-Thermalization Profiling**: Automate multi-interval state capture to find the optimal divergence window for different prompt types.
 - **Persistent Modulation:** Instead of one-time seeding, the prompt could be converted into a constant "modulation field" (similar to the Titan feedback) that influences the Hilbert space at every step. This would make the prompt act as a "force" rather than just a "starting state."
-- **Fractal Folding:** Mapping prompt bytes to a recursive geometric structure (like a Sierpinski triangle) within the grid to make the information more resilient to entropic decay.
-- **Topological Prompting:** Letting the prompt define the grid's wrap-around logic (e.g., torus vs. sphere) to fundamentally change the system's structural evolution.
+
 
 ### Creative Applications
 - **Procedural World-Building:** Using large grids (200x80+) as "territory maps" where focal points represent semantic hubs or landmarks.
