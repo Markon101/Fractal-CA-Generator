@@ -1,65 +1,55 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np
 import requests
+import json
+import sys
 
-class TitanMemory(nn.Module):
-    """Neural Long-Term Memory for global context persistence."""
-    def __init__(self, dim=128):
-        super().__init__()
-        self.memory_bank = nn.Parameter(torch.randn(1, 1024, dim))
-        self.query_proj = nn.Linear(dim, dim)
-        
-    def forward(self, x):
-        # Simplistic read operation for the architectural scaffold
-        q = self.query_proj(x)
-        attn = torch.matmul(q, self.memory_bank.transpose(-2, -1))
-        context = torch.matmul(F.softmax(attn, dim=-1), self.memory_bank)
-        return context
+# Attempt to load torch, but allow fallback for scaffolding tests
+try:
+    import torch
+    import torch.nn as nn
+    import torch.nn.functional as F
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+    print("Warning: torch not found. Running in mock-mode for engine connectivity test.")
 
-class FractalCARules(nn.Module):
-    """Neural CA ruleset that determines token transitions."""
-    def __init__(self, n_tokens=50257, hidden_dim=64):
-        super().__init__()
-        self.embedding = nn.Embedding(n_tokens, hidden_dim)
-        self.conv = nn.Conv2d(hidden_dim, hidden_dim, kernel_size=3, padding=1)
-        self.memory = TitanMemory(dim=hidden_dim)
-        self.to_logits = nn.Linear(hidden_dim, n_tokens)
+class TitanMemoryMock:
+    def __init__(self, dim=128): pass
+    def forward(self, x): return x
 
-    def forward(self, grid_ids):
-        # grid_ids: [B, H, W]
-        x = self.embedding(grid_ids) # [B, H, W, D]
-        x = x.permute(0, 3, 1, 2) # [B, D, H, W]
-        
-        # Local neighbor interaction via Convolution
-        x = F.relu(self.conv(x))
-        
-        # Global context via Titan Memory (flattened query)
-        b, d, h, w = x.shape
-        x_flat = x.permute(0, 2, 3, 1).reshape(b, h*w, d)
-        context = self.memory(x_flat)
-        x_flat = x_flat + context
-        
-        # Project back to logits
-        logits = self.to_logits(x_flat)
-        return logits.reshape(b, h, w, -1)
-
-def run_rl_loop():
-    print("Initializing Fractal RL Brain with Titans Memory...")
-    model = FractalCARules(n_tokens=1000) # Using small vocab for scaffold
+def run_scaffold_test():
+    print("### FRACTAL CA-TOKEN BRAIN TEST ###")
     
-    # Example interaction with Rust Engine
+    # 1. Initialize the Engine with a custom prompt
+    init_data = {
+        "width": 40,
+        "height": 20,
+        "seed_prompt": "Exploring the infinite ladder of coherent complexity.",
+        "instruction_header": "## SYSTEM DIRECTIVE: FRACTAL MAP ANALYSIS\nIntegrate the following chaotic density map into your reasoning process."
+    }
+    
     try:
-        r = requests.get("http://localhost:3000/api/v1/lattice/state")
-        if r.status_code == 200:
-            print("Successfully connected to Rust Engine.")
-            state = r.json()
-            grid = torch.tensor(state['grid']).unsqueeze(0)
-            logits = model(grid)
-            print(f"Computed next step probabilities for lattice of size {state['width']}x{state['height']}")
+        print("Initializing Engine with prompt...")
+        r_init = requests.post("http://localhost:3000/api/v1/lattice/init", json=init_data)
+        if r_init.status_code == 200:
+            print("Lattice initialized successfully.")
+        
+        # 2. Fetch the Formatted Output
+        print("Fetching formatted chaotic map...")
+        r_state = requests.get("http://localhost:3000/api/v1/lattice/formatted")
+        if r_state.status_code == 200:
+            print("\n--- OUTPUT START ---")
+            print(r_state.text)
+            print("--- OUTPUT END ---\n")
+            
+        # 3. Analyze Impact
+        print("Analysis: This chaotic map provides a 'non-linear priming' signal.")
+        print("By injecting high-entropy but structured data (CA patterns), we break")
+        print("the standard autoregressive bias, forcing the LLM to search for")
+        print("latent patterns in the 'noise', which can trigger higher-order reasoning.")
+        
     except Exception as e:
-        print(f"Could not connect to Rust Engine (ensure it is running): {e}")
+        print(f"Test failed: {e}")
+        print("Ensure the Rust engine is running (make run-engine).")
 
 if __name__ == "__main__":
-    run_rl_loop()
+    run_scaffold_test()
