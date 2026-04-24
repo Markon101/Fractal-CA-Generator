@@ -81,12 +81,12 @@ def generate_primed_instruction(instruction, metrics):
     hotspots = extract_semantic_hotspots(instruction, metrics)
     
     # Map metrics to qualitative descriptors
-    if metrics['entropy'] > 10:
+    if metrics['entropy'] > 10.95:
         vibe = "Highly divergent and creative."
     else:
         vibe = "Convergent and analytical."
         
-    if metrics['resonance'] > 2.0:
+    if metrics['resonance'] > 1.45:
         structure = "Strong rhythmic patterns detected. Use structured, modular responses."
     else:
         structure = "Diffuse state. Prefer fluid, narrative explanations."
@@ -111,7 +111,7 @@ Analyze the provided metrics and hotspots. Adjust your temperature and reasoning
 def main():
     parser = argparse.ArgumentParser(description="Priming Agent for LLM Contextualization")
     parser.add_argument("instruction", help="The instruction to prime")
-    parser.add_argument("--iterations", type=int, default=30)
+    parser.add_argument("--iterations", type=int, default=10)
     
     args = parser.parse_args()
     
