@@ -1,5 +1,5 @@
 use axum::{
-    extract::{State, Query},
+    extract::{State},
     routing::{get, post},
     Json, Router,
 };
@@ -10,28 +10,8 @@ use clap::{Parser, Subcommand};
 use rand::seq::SliceRandom;
 use ndarray::prelude::*;
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
-struct Cell {
-    u_re: f32, u_im: f32,
-    d_re: f32, d_im: f32,
-    l_re: f32, l_im: f32,
-    r_re: f32, r_im: f32,
-}
-
-impl Cell {
-    fn new() -> Self {
-        Cell {
-            u_re: 0.0, u_im: 0.0,
-            d_re: 0.0, d_im: 0.0,
-            l_re: 0.0, l_im: 0.0,
-            r_re: 0.0, r_im: 0.0,
-        }
-    }
-    fn prob(&self) -> f32 {
-        self.u_re.powi(2) + self.u_im.powi(2) + self.d_re.powi(2) + self.d_im.powi(2) +
-        self.l_re.powi(2) + self.l_im.powi(2) + self.r_re.powi(2) + self.r_im.powi(2)
-    }
-}
+mod core;
+use crate::core::{Cell, TitanMemory};
 
 #[derive(Serialize, Deserialize, Clone)]
 struct LatticeState {
@@ -41,7 +21,8 @@ struct LatticeState {
     iteration: u64,
     seed_prompt: String,
     instruction_header: String,
-    modulation_field: Vec<f32>,
+    modulation_field: Vec<f32>, // Titan/User feedback
+    semantic_field: Vec<f32>,   // Constant prompt influence
 }
 
 #[derive(Serialize, Debug)]
@@ -55,6 +36,7 @@ struct Metrics {
 impl LatticeState {
     fn new(width: usize, height: usize, prompt: &str) -> Self {
         let mut grid = vec![vec![Cell::new(); width]; height];
+        let mut semantic_field = vec![0.0; width * height];
         let bytes = prompt.as_bytes();
         
         if bytes.is_empty() {
@@ -73,6 +55,8 @@ impl LatticeState {
                         grid[y][x].u_im = phase.sin() * 0.7;
                         grid[y][x].d_re = phase.cos() * 0.3;
                         grid[y][x].d_im = -phase.sin() * 0.3;
+                        
+                        semantic_field[y * width + x] = (b as f32) / 255.0;
                         found = true;
                         break;
                     }
@@ -84,6 +68,7 @@ impl LatticeState {
                     let phase = (b as f32) / 255.0 * std::f32::consts::TAU;
                     grid[y][x].u_re = phase.cos() * 0.5;
                     grid[y][x].u_im = phase.sin() * 0.5;
+                    semantic_field[y * width + x] = (b as f32) / 255.0;
                 }
             }
         }
@@ -96,6 +81,7 @@ impl LatticeState {
             seed_prompt: prompt.to_string(),
             instruction_header: "## TITAN MEMORY CONTEXT".to_string(),
             modulation_field: vec![1.0; width * height],
+            semantic_field,
         }
     }
 
@@ -128,8 +114,11 @@ impl LatticeState {
                 let mut cell = Cell { u_re, u_im, d_re, d_im, l_re, l_im, r_re, r_im };
                 
                 let p = cell.prob();
-                let mod_val = self.modulation_field[y * self.width + x];
-                let theta = p * 10.0 * mod_val; 
+                let idx = y * self.width + x;
+                let mod_val = self.modulation_field[idx];
+                let sem_val = self.semantic_field[idx];
+                
+                let theta = p * 10.0 * mod_val * (1.0 + sem_val * 2.0); 
                 let (cos_t, sin_t) = (theta.cos(), theta.sin());
                 
                 let rotate = |re: f32, im: f32| (re * cos_t - im * sin_t, re * sin_t + im * cos_t);
@@ -201,39 +190,6 @@ impl LatticeState {
             output.push('\n');
         }
         output
-    }
-}
-
-// --- Titan Neural Memory ---
-
-struct TitanMemory {
-    w: Array1<f32>,
-    b: Array1<f32>,
-    lr: f32,
-}
-
-impl TitanMemory {
-    fn new(size: usize, lr: f32) -> Self {
-        use rand::Rng;
-        let mut rng = rand::thread_rng();
-        let w = Array1::from_shape_fn(size, |_| rng.gen_range(-0.1..0.1));
-        let b = Array1::from_shape_fn(size, |_| rng.gen_range(-0.1..0.1));
-        TitanMemory { w, b, lr }
-    }
-
-    fn forward(&self, x: &Array1<f32>) -> Array1<f32> {
-        let out = x * &self.w + &self.b;
-        out.mapv(|v| v.tanh())
-    }
-
-    fn update(&mut self, x: &Array1<f32>, target: &Array1<f32>) -> f32 {
-        let pred = self.forward(x);
-        let error = &pred - target;
-        
-        self.w -= &(x * &error * self.lr);
-        self.b -= &(&error * self.lr);
-        
-        error.mapv(|v| v.abs()).mean().unwrap_or(0.0)
     }
 }
 
@@ -375,7 +331,6 @@ async fn main() {
         Some(Commands::Prime { instruction, iterations }) => run_prime(&instruction, iterations),
         Some(Commands::DeepTime { prompt }) => run_deep_time(&prompt),
         None => {
-            // Default behavior if no command: run server on 3000
             run_server(3000).await;
         }
     }
