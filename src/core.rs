@@ -24,19 +24,23 @@ impl Cell {
     }
 }
 
+// Hyper-dimensional, self-optimizing memory structure
+#[derive(Clone)]
 pub struct TitanMemory {
     pub w: Array1<f32>,
     pub b: Array1<f32>,
-    pub lr: f32,
+    pub alpha_field: Array1<f32>, // Localized, self-optimizing learning rates
+    pub base_lr: f32,
 }
 
 impl TitanMemory {
-    pub fn new(size: usize, lr: f32) -> Self {
+    pub fn new(size: usize, base_lr: f32) -> Self {
         use rand::Rng;
         let mut rng = rand::thread_rng();
         let w = Array1::from_shape_fn(size, |_| rng.gen_range(-0.1..0.1));
         let b = Array1::from_shape_fn(size, |_| rng.gen_range(-0.1..0.1));
-        TitanMemory { w, b, lr }
+        let alpha_field = Array1::from_elem(size, 1.0); // Start at 1.0 multiplier
+        TitanMemory { w, b, alpha_field, base_lr }
     }
 
     pub fn forward(&self, x: &Array1<f32>) -> Array1<f32> {
@@ -44,13 +48,31 @@ impl TitanMemory {
         out.mapv(|v| v.tanh())
     }
 
-    pub fn update(&mut self, x: &Array1<f32>, target: &Array1<f32>) -> f32 {
+    // Returns (scalar loss, modulation field)
+    pub fn update_and_modulate(&mut self, x: &Array1<f32>, target: &Array1<f32>) -> (f32, Array1<f32>) {
         let pred = self.forward(x);
         let error = &pred - target;
         
-        self.w -= &(x * &error * self.lr);
-        self.b -= &(&error * self.lr);
+        // 1. Self-Optimizing Memory Structure:
+        // Adjust the localized learning rate based on error magnitude.
+        // High error = increase learning rate. Low error = decay learning rate (consolidation).
+        for i in 0..self.alpha_field.len() {
+            let err_mag = error[i].abs();
+            if err_mag > 0.1 {
+                self.alpha_field[i] = (self.alpha_field[i] * 1.05).min(5.0); // Cap multiplier
+            } else {
+                self.alpha_field[i] = (self.alpha_field[i] * 0.99).max(0.1); // Floor multiplier
+            }
+        }
         
-        error.mapv(|v| v.abs()).mean().unwrap_or(0.0)
+        // Apply gradient update using the dynamic, localized alpha field
+        let effective_lr = &self.alpha_field * self.base_lr;
+        self.w -= &(x * &error * &effective_lr);
+        self.b -= &(&error * &effective_lr);
+        
+        let loss = error.mapv(|v| v.abs()).mean().unwrap_or(0.0);
+        
+        // The output of the memory network becomes the modulation field for the next step
+        (loss, pred)
     }
 }

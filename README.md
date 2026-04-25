@@ -1,14 +1,15 @@
 # Fractal CA Generator
 
-A high-performance, pure Rust implementation of a Fractal Cellular Automata (CA) engine. This project unifies the evolution engine, semantic analysis (Chaos Agent), and neural memory (Titan) into a single, efficient binary.
+A high-performance, pure Rust implementation of a Fractal Cellular Automata (CA) engine. This project unifies the evolution engine, semantic analysis (Chaos Agent), and intrinsic neural memory (Titan) into a single, efficient binary.
 
 ## Core Features
 
-- **Hilbert-Space Evolution**: Multi-dimensional CA state mapping.
-- **Continuous Semantic Modulation**: The prompt acts as a persistent field influencing every evolution step.
-- **Titan Neural Memory**: Native Online SGD implementation using `ndarray` for real-time state modulation.
-- **Semantic Analysis**: Heuristic cluster detection and focal point extraction.
-- **LLM Priming**: Chaos-driven context generation for enhanced AI prompting.
+- **Hilbert-Space Evolution**: Multi-dimensional CA state mapping using fractal folding seeding.
+- **Continuous Semantic Modulation**: The prompt acts as a persistent field influencing every evolution step, preventing semantic decay.
+- **Intrinsic Titan Memory**: Microscopic Online SGD embedded into every lattice cell.
+- **Self-Optimizing Structure**: Dynamic, per-cell learning rates (`alpha_field`) that adapt based on local entropy and error gradients.
+- **Semantic Analysis**: Heuristic cluster detection and focal point extraction for actionable AI insights.
+- **LLM Priming**: Chaos-driven context generation with native memory loss metrics.
 - **Native CLI**: Robust command-line interface with subcommands for all workflows.
 - **REST API**: Integrated Axum server for remote integration.
 
@@ -44,7 +45,7 @@ Starts the engine as a REST API server.
   ```
 
 ### 2. `agent`
-Runs the Chaos Agent to analyze a prompt and extract semantic focal points.
+Runs the Chaos Agent to analyze a prompt and extract semantic focal points. Memory is updated natively during evolution.
 - **Parameters**:
   - `<PROMPT>`: The input seed string (Required).
   - `-i, --iterations <N>`: Number of evolution steps (default: `15`).
@@ -56,20 +57,8 @@ Runs the Chaos Agent to analyze a prompt and extract semantic focal points.
   ./target/release/fractal-ca agent "Design a Martian colony" --iterations 30 --width 120
   ```
 
-### 3. `titan`
-Trains the Titan Neural Memory on a specific seed to learn its semantic signature.
-- **Parameters**:
-  - `<SEED>`: The seed to train on (Required).
-  - `-s, --steps <N>`: Number of training steps (default: `100`).
-  - `-w, --width <N>`: Grid width (default: `60`).
-  - `-h, --height <N>`: Grid height (default: `30`).
-- **Example**:
-  ```bash
-  ./target/release/fractal-ca titan "Quantum Logic Gates" --steps 1000
-  ```
-
-### 4. `prime`
-Generates a "Chaos-Primed" instruction for an LLM (e.g., GPT-4, Claude).
+### 3. `prime`
+Generates a "Chaos-Primed" instruction for an LLM (e.g., GPT-4, Claude). Includes native Titan memory loss metrics.
 - **Parameters**:
   - `<INSTRUCTION>`: The instruction to prime (Required).
   - `-i, --iterations <N>`: Evolution steps to determine "vibe" (default: `10`).
@@ -78,8 +67,8 @@ Generates a "Chaos-Primed" instruction for an LLM (e.g., GPT-4, Claude).
   ./target/release/fractal-ca prime "Write a story about a clockmaker"
   ```
 
-### 5. `observe`
-Visualizes the CA evolution in the terminal in real-time.
+### 4. `observe`
+Visualizes the CA evolution and native memory loss in the terminal in real-time.
 - **Parameters**:
   - `<SEED>`: The seed string (Required).
   - `-d, --duration <SECONDS>`: How long to run (default: `0`, which runs for 100 iterations).
@@ -88,8 +77,8 @@ Visualizes the CA evolution in the terminal in real-time.
   ./target/release/fractal-ca observe "Solar Flare" --duration 30
   ```
 
-### 6. `deep-time`
-Simulates long-term evolution (epochs: 1, 100, 500, 1000, 5000) and extracts temporal insights.
+### 5. `deep-time`
+Simulates long-term evolution (epochs: 1, 100, 500, 1000, 5000) and extracts temporal insights using intrinsic learning.
 - **Parameters**:
   - `[PROMPT]`: Optional seed (default: Europa Orbital Research Station).
 - **Example**:
@@ -97,8 +86,8 @@ Simulates long-term evolution (epochs: 1, 100, 500, 1000, 5000) and extracts tem
   ./target/release/fractal-ca deep-time "Cybernetic Jungle"
   ```
 
-### 7. `lab`
-Runs the internal test suite, including determinism checks and entropy sweeps.
+### 6. `lab`
+Runs the internal test suite, including determinism checks, entropy sweeps, and native Titan loss validation.
 - **Example**:
   ```bash
   ./target/release/fractal-ca lab
@@ -109,33 +98,33 @@ Runs the internal test suite, including determinism checks and entropy sweeps.
 ## Combining Commands & Workflows
 
 ### The "Creative Loop"
-1. **Observe** a seed to see if it produces interesting visual structures:
+1. **Observe** a seed to see if it produces interesting visual structures and low memory loss:
    ```bash
    ./target/release/fractal-ca observe "Bioluminescent Reef"
    ```
-2. **Train** Titan memory to capture that seed's specific resonance:
+2. **Analyze** with `agent` to extract actionable insights from the mature memory state:
    ```bash
-   ./target/release/fractal-ca titan "Bioluminescent Reef" --steps 500
+   ./target/release/fractal-ca agent "Bioluminescent Reef" --iterations 50
    ```
-3. **Prime** a related prompt using the learned complexity metrics:
+3. **Prime** a related prompt using the complexity metrics derived from the intrinsic learning:
    ```bash
    ./target/release/fractal-ca prime "Describe the biology of a bioluminescent reef"
    ```
 
-### Scripting with `agent` output
-You can pipe the `agent` output into other tools or use it to generate logs:
+### Recursive Chaos (AI Agency)
+Feed a directive about the system's own evolution into the engine to derive self-optimizing strategies:
 ```bash
-./target/release/fractal-ca agent "Distributed Systems" > analysis.log
+./target/release/fractal-ca prime "Evolve the engine for hyper-dimensional feedback"
 ```
 
 ---
 
 ## API Integration
 
-When running in `server` mode, you can interact with the engine via POST requests:
+When running in `server` mode, you can interact with the engine via POST requests. Note: standalone memory modulation is no longer required as it is handled natively in the `step` logic.
 
-- `POST /api/v1/init`: Initialize a new lattice.
-- `POST /api/v1/step`: Evolve the lattice (supports neural modulation fields).
-- `GET /api/v1/formatted`: Retrieve the ASCII representation of the current state.
+- `POST /api/v1/init`: Initialize a new lattice with native memory.
+- `POST /api/v1/step`: Evolve the lattice (Intrinsic Titan modulation).
+- `GET /api/v1/formatted`: Retrieve the ASCII representation and memory state.
 
-See `src/main.rs` for detailed JSON request/response schemas.
+See `src/main.rs` and `src/core.rs` for detailed JSON request/response schemas.

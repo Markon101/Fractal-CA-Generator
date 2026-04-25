@@ -13,7 +13,7 @@ use ndarray::prelude::*;
 mod core;
 use crate::core::{Cell, TitanMemory};
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Clone)]
 struct LatticeState {
     grid: Vec<Vec<Cell>>,
     width: usize,
@@ -21,8 +21,9 @@ struct LatticeState {
     iteration: u64,
     seed_prompt: String,
     instruction_header: String,
-    modulation_field: Vec<f32>, // Titan/User feedback
     semantic_field: Vec<f32>,   // Constant prompt influence
+    memory: TitanMemory,        // HYPER-DIMENSIONAL FEEDBACK LOOP
+    current_probs: Array1<f32>, // Store state for gradient updates
 }
 
 #[derive(Serialize, Debug)]
@@ -31,6 +32,7 @@ struct Metrics {
     density: f32,
     resonance: f32,
     raw_sum: f32,
+    loss: f32, // New metric from integrated memory
 }
 
 impl LatticeState {
@@ -73,6 +75,14 @@ impl LatticeState {
             }
         }
 
+        let size = width * height;
+        let mut initial_probs = Vec::with_capacity(size);
+        for row in &grid {
+            for cell in row {
+                initial_probs.push(cell.prob());
+            }
+        }
+
         LatticeState {
             grid,
             width,
@@ -80,13 +90,18 @@ impl LatticeState {
             iteration: 0,
             seed_prompt: prompt.to_string(),
             instruction_header: "## TITAN MEMORY CONTEXT".to_string(),
-            modulation_field: vec![1.0; width * height],
             semantic_field,
+            memory: TitanMemory::new(size, 0.01),
+            current_probs: Array1::from_vec(initial_probs),
         }
     }
 
-    fn step(&mut self) {
+    fn step(&mut self) -> f32 {
         let mut next_grid = self.grid.clone();
+        
+        // 1. Hyper-dimensional feedback: Get modulation from Titan Memory based on previous state
+        let (loss, modulation_field) = self.memory.update_and_modulate(&self.current_probs, &self.current_probs); // Predict self
+        
         let coin = |c: &Cell, dir: char| -> (f32, f32) {
             let s_re = c.u_re + c.d_re + c.l_re + c.r_re;
             let s_im = c.u_im + c.d_im + c.l_im + c.r_im;
@@ -98,6 +113,8 @@ impl LatticeState {
                 _ => (0.0, 0.0)
             }
         };
+
+        let mut next_probs = Vec::with_capacity(self.width * self.height);
 
         for y in 0..self.height {
             for x in 0..self.width {
@@ -115,10 +132,11 @@ impl LatticeState {
                 
                 let p = cell.prob();
                 let idx = y * self.width + x;
-                let mod_val = self.modulation_field[idx];
+                let mod_val = modulation_field[idx];
                 let sem_val = self.semantic_field[idx];
                 
-                let theta = p * 10.0 * mod_val * (1.0 + sem_val * 2.0); 
+                // Hyper-dimensional rotation: Driven by semantic prompt and Neural Memory
+                let theta = p * 10.0 * (1.0 + mod_val) * (1.0 + sem_val * 2.0); 
                 let (cos_t, sin_t) = (theta.cos(), theta.sin());
                 
                 let rotate = |re: f32, im: f32| (re * cos_t - im * sin_t, re * sin_t + im * cos_t);
@@ -128,10 +146,20 @@ impl LatticeState {
                 (cell.r_re, cell.r_im) = rotate(cell.r_re, cell.r_im);
 
                 next_grid[y][x] = cell;
+                next_probs.push(cell.prob());
             }
         }
+        
         self.grid = next_grid;
         self.iteration += 1;
+        
+        let new_probs_arr = Array1::from_vec(next_probs);
+        
+        // 2. Self-Optimizing Update: Titan learns the transition from old state to new state
+        let (true_loss, _) = self.memory.update_and_modulate(&self.current_probs, &new_probs_arr);
+        self.current_probs = new_probs_arr;
+        
+        true_loss
     }
 
     fn get_probs(&self) -> Vec<f32> {
@@ -143,7 +171,7 @@ impl LatticeState {
         let total_p: f32 = probs.iter().sum();
         
         if total_p == 0.0 {
-            return Metrics { entropy: 0.0, density: 0.0, resonance: 0.0, raw_sum: 0.0 };
+            return Metrics { entropy: 0.0, density: 0.0, resonance: 0.0, raw_sum: 0.0, loss: 0.0 };
         }
 
         let entropy = -probs.iter().filter(|&&p| p > 0.0).map(|&p| {
@@ -160,11 +188,16 @@ impl LatticeState {
         let variance = probs.iter().map(|&p| (p - avg_p).powi(2)).sum::<f32>() / probs.len() as f32;
         let resonance = variance.sqrt() / (avg_p + 1e-9);
 
+        // Calculate current loss without mutating
+        let pred = self.memory.forward(&self.current_probs);
+        let loss = (&pred - &self.current_probs).mapv(|v| v.abs()).mean().unwrap_or(0.0);
+
         Metrics {
             entropy,
             density,
             resonance,
             raw_sum: total_p,
+            loss,
         }
     }
 
@@ -197,7 +230,7 @@ impl LatticeState {
 
 #[derive(Parser)]
 #[command(name = "fractal-ca")]
-#[command(about = "Fractal Cellular Automata & Titan Neural Memory", long_about = None)]
+#[command(about = "Fractal Cellular Automata with NATIVE Self-Optimizing Titan Memory", long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -205,51 +238,25 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Start the engine server
-    Server {
-        #[arg(short, long, default_value_t = 3000)]
-        port: u16,
-    },
-    /// Run as a Chaos Agent to analyze a prompt
+    Server { #[arg(short, long, default_value_t = 3000)] port: u16 },
     Agent {
         prompt: String,
-        #[arg(short, long, default_value_t = 15)]
-        iterations: u64,
-        #[arg(short, long, default_value_t = 80)]
-        width: usize,
-        #[arg(short, long, default_value_t = 40)]
-        height: usize,
-        #[arg(short, long, default_value_t = 5)]
-        points: usize,
+        #[arg(short, long, default_value_t = 15)] iterations: u64,
+        #[arg(short, long, default_value_t = 80)] width: usize,
+        #[arg(short, long, default_value_t = 40)] height: usize,
+        #[arg(short, long, default_value_t = 5)] points: usize,
     },
-    /// Run laboratory experiments (entropy sweep, etc.)
     Lab {},
-    /// Train Titan Neural Memory on a seed
-    Titan {
-        seed: String,
-        #[arg(short, long, default_value_t = 100)]
-        steps: u64,
-        #[arg(short, long, default_value_t = 60)]
-        width: usize,
-        #[arg(short, long, default_value_t = 30)]
-        height: usize,
-    },
-    /// Observe the CA evolution in real-time
     Observe {
         seed: String,
-        #[arg(short, long, default_value_t = 0)]
-        duration: u64,
+        #[arg(short, long, default_value_t = 0)] duration: u64,
     },
-    /// Generate a primed instruction for an LLM
     Prime {
         instruction: String,
-        #[arg(short, long, default_value_t = 10)]
-        iterations: u64,
+        #[arg(short, long, default_value_t = 10)] iterations: u64,
     },
-    /// Simulate long-term evolution (Deep Time)
     DeepTime {
-        #[arg(default_value = "Europa Orbital Research Station: Thousand Year Legacy")]
-        prompt: String,
+        #[arg(default_value = "Europa Orbital Research Station: Thousand Year Legacy")] prompt: String,
     },
 }
 
@@ -263,55 +270,41 @@ struct AppState {
 struct InitRequest { 
     width: usize, 
     height: usize, 
-    #[serde(alias = "seed_prompt")]
-    seed: String,
-    #[serde(default)]
-    instruction_header: Option<String>,
+    #[serde(alias = "seed_prompt")] seed: String,
+    #[serde(default)] instruction_header: Option<String>,
 }
 
 async fn init_lattice(State(state): State<Arc<AppState>>, Json(payload): Json<InitRequest>) -> Json<String> {
     let mut l = state.lattice.lock().unwrap();
     *l = LatticeState::new(payload.width, payload.height, &payload.seed);
-    if let Some(header) = payload.instruction_header {
-        l.instruction_header = header;
-    }
+    if let Some(header) = payload.instruction_header { l.instruction_header = header; }
     Json("Init".to_string())
 }
 
 #[derive(Deserialize)]
 struct ModulateRequest { 
-    field: Option<Vec<f32>>,
-    #[serde(default = "default_step_count")]
-    count: u64,
+    #[serde(default = "default_step_count")] count: u64,
 }
 
 fn default_step_count() -> u64 { 1 }
 
 async fn run_step(State(state): State<Arc<AppState>>, Json(payload): Json<ModulateRequest>) -> Json<Vec<f32>> {
     let mut l = state.lattice.lock().unwrap();
-    if let Some(field) = payload.field {
-        if field.len() == l.modulation_field.len() {
-            l.modulation_field = field;
-        }
-    }
     for _ in 0..payload.count {
-        l.step();
+        l.step(); // Step now intrinsically handles Titan modulation
     }
     Json(l.get_probs())
 }
 
 #[derive(Deserialize)]
 struct FormattedRequest {
-    #[serde(default)]
-    steps: u64,
+    #[serde(default)] steps: u64,
 }
 
 async fn get_formatted(State(state): State<Arc<AppState>>, payload: Option<Json<FormattedRequest>>) -> String {
     let mut l = state.lattice.lock().unwrap();
     if let Some(Json(p)) = payload {
-        for _ in 0..p.steps {
-            l.step();
-        }
+        for _ in 0..p.steps { l.step(); }
     }
     l.get_formatted_output()
 }
@@ -326,13 +319,10 @@ async fn main() {
         Some(Commands::Server { port }) => run_server(port).await,
         Some(Commands::Agent { prompt, iterations, width, height, points }) => run_agent(&prompt, iterations, width, height, points),
         Some(Commands::Lab {}) => run_lab(),
-        Some(Commands::Titan { seed, steps, width, height }) => run_titan(&seed, steps, width, height),
         Some(Commands::Observe { seed, duration }) => run_observe(&seed, duration).await,
         Some(Commands::Prime { instruction, iterations }) => run_prime(&instruction, iterations),
         Some(Commands::DeepTime { prompt }) => run_deep_time(&prompt),
-        None => {
-            run_server(3000).await;
-        }
+        None => { run_server(3000).await; }
     }
 }
 
@@ -350,13 +340,14 @@ async fn run_server(port: u16) {
 
     let addr = format!("0.0.0.0:{}", port);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
-    println!("Titan-Hilbert Engine on port {}", port);
+    println!("Titan-Hilbert Engine natively augmented with Titan Memory on port {}", port);
     axum::serve(listener, app).await.unwrap();
 }
 
 fn run_agent(prompt: &str, iterations: u64, width: usize, height: usize, max_points: usize) {
     let mut l = LatticeState::new(width, height, prompt);
-    for _ in 0..iterations { l.step(); }
+    let mut final_loss = 0.0;
+    for _ in 0..iterations { final_loss = l.step(); }
     let map_text = l.get_formatted_output();
     println!("{}", map_text);
 
@@ -382,15 +373,11 @@ fn run_agent(prompt: &str, iterations: u64, width: usize, height: usize, max_poi
                         let nx = x as i32 + dx;
                         if ny >= 0 && ny < grid.len() as i32 && nx >= 0 && nx < grid[y].len() as i32 {
                             let nc = grid[ny as usize][nx as usize];
-                            if nc == '@' || nc == 'X' || nc == 'o' || nc == '*' {
-                                density += 1;
-                            }
+                            if nc == '@' || nc == 'X' || nc == 'o' || nc == '*' { density += 1; }
                         }
                     }
                 }
-                if density > 0 {
-                    focal_points.push(Point { x, y, density, char: c });
-                }
+                if density > 0 { focal_points.push(Point { x, y, density, char: c }); }
             }
         }
     }
@@ -405,11 +392,11 @@ fn run_agent(prompt: &str, iterations: u64, width: usize, height: usize, max_poi
     }
 
     println!("\n[AGENT THOUGHT PROCESS: {}]", prompt);
+    println!(">>> NATIVE TITAN MEMORY LOSS: {:.6}", final_loss);
     let strategies = ["Architectural Core", "Edge-case Anomaly", "Emergent Bridge", "Fractal Resonance", "Entropic Drift"];
     for (i, pt) in distinct_points.iter().enumerate() {
         let strategy = strategies[i % strategies.len()];
         println!("Cluster {} at [X:{}, Y:{}] (Density: {}) -> {}", i+1, pt.x, pt.y, pt.density, strategy);
-        
         let focus = if pt.y < 10 { "Front-end/UI" } else if pt.y < 25 { "Logic/Middleware" } else { "Database/Infra" };
         let action = if pt.x < 30 { "speed/latency" } else if pt.x < 60 { "reliability/fault tolerance" } else { "scalability/modularity" };
         println!("   Insight: Focus on '{}' and optimize for {}.", focus, action);
@@ -418,7 +405,6 @@ fn run_agent(prompt: &str, iterations: u64, width: usize, height: usize, max_poi
 
 fn run_lab() {
     println!("### CHAOS LABORATORY: PHASE TRANSITION ANALYSIS ###");
-    
     println!("\n[Test 1: Determinism]");
     let p1 = LatticeState::new(40, 20, "Alpha").get_formatted_output();
     let p2 = LatticeState::new(40, 20, "Alpha").get_formatted_output();
@@ -429,31 +415,10 @@ fn run_lab() {
     for length in 1..=20 {
         let prompt = "A".repeat(length);
         let mut l = LatticeState::new(40, 20, &prompt);
-        for _ in 0..10 { l.step(); }
+        let mut final_loss = 0.0;
+        for _ in 0..10 { final_loss = l.step(); }
         let metrics = l.get_metrics();
-        println!("Length {:2} | Density: {:.4} {}", length, metrics.density, "#".repeat((metrics.density * 100.0) as usize));
-    }
-}
-
-fn run_titan(seed: &str, steps: u64, width: usize, height: usize) {
-    let size = width * height;
-    let mut l = LatticeState::new(width, height, seed);
-    let mut titan = TitanMemory::new(size, 0.01);
-    let mut current_field = Array1::from_elem(size, 1.0);
-
-    println!("### TITAN NEURAL MEMORY RUN: {}x{} | {} Steps ###", width, height, steps);
-    for i in 0..steps {
-        let modulation = titan.forward(&current_field);
-        l.modulation_field = modulation.to_vec();
-        l.step();
-        
-        let next_probs = Array1::from_vec(l.get_probs());
-        let loss = titan.update(&current_field, &next_probs);
-        current_field = next_probs;
-
-        if i % 100 == 0 || i == steps - 1 {
-            println!("Step {:5} | Loss: {:.8}", i, loss);
-        }
+        println!("Length {:2} | Density: {:.4} | Titan Loss: {:.6} {}", length, metrics.density, final_loss, "#".repeat((metrics.density * 100.0) as usize));
     }
 }
 
@@ -461,9 +426,10 @@ async fn run_observe(seed: &str, duration: u64) {
     let mut l = LatticeState::new(60, 30, seed);
     let start = std::time::Instant::now();
     loop {
-        l.step();
+        let loss = l.step();
         print!("\x1B[H\x1B[J"); // Clear screen
         println!("{}", l.get_formatted_output());
+        println!(">>> TITAN MEMORY LOSS: {:.6}", loss);
         
         if duration > 0 && start.elapsed().as_secs() >= duration { break; }
         if duration == 0 && l.iteration >= 100 { break; }
@@ -487,7 +453,7 @@ fn run_prime(instruction: &str, iterations: u64) {
     let hotspot_str: String = hotspots.iter().map(|s| **s).collect::<Vec<&str>>().join(", ");
 
     println!("### CHAOS-PRIMED EXECUTION CONTEXT");
-    println!("[METRICS]\n- Entropy: {:.4} ({})\n- Density: {:.4}\n- Resonance: {:.4} ({})", metrics.entropy, vibe, metrics.density, metrics.resonance, structure);
+    println!("[METRICS]\n- Entropy: {:.4} ({})\n- Density: {:.4}\n- Resonance: {:.4} ({})\n- Titan Loss: {:.6}", metrics.entropy, vibe, metrics.density, metrics.resonance, structure, metrics.loss);
     println!("\n[SEMANTIC HOTSPOTS]\nThe chaotic evolution highlighted these core concepts: {}", hotspot_str);
     println!("\n[INSTRUCTION]\n{}", instruction);
     println!("\n[CHAOS DIRECTIVE]\nAnalyze the provided metrics and hotspots. Adjust your temperature and reasoning style to match the 'vibe' and 'structure' described above.");
@@ -499,11 +465,12 @@ fn run_deep_time(prompt: &str) {
     let epochs = [1, 100, 500, 1000, 5000];
     
     for &target in &epochs {
-        while l.iteration < target { l.step(); }
+        let mut final_loss = 0.0;
+        while l.iteration < target { final_loss = l.step(); }
         let metrics = l.get_metrics();
         let density_raw = (metrics.density * (80.0 * 40.0)) as usize;
         
-        println!("\n--- EPOCH {} (Density: {}) ---", target, density_raw);
+        println!("\n--- EPOCH {} (Density: {}) | Titan Loss: {:.6} ---", target, density_raw, final_loss);
         if density_raw > 1500 { println!("Status: Over-growth / Hyper-complexity."); }
         else if density_raw > 800 { println!("Status: Mature equilibrium."); }
         else if density_raw > 100 { println!("Status: Entropic decay."); }

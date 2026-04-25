@@ -3,51 +3,28 @@
 ## Pure Rust Transformation (April 2026)
 The project has been fully converted to a pure Rust implementation. The Python scripts have been decommissioned and their logic integrated directly into the `fractal-ca` binary.
 
-### Unified CLI Usage
-The engine now supports multiple operational modes via subcommands:
+## Hyper-Dimensional Evolution (Autonomous Upgrade)
 
-**Chaos Agent:**
-```bash
-cargo run --release -- agent "<prompt>" [iterations] [width] [height]
-```
-
-**Titan Neural Memory:**
-```bash
-cargo run --release -- titan "<seed>" --steps 500
-```
-
-**LLM Priming:**
-```bash
-cargo run --release -- prime "<instruction>"
-```
-
-**Server Mode:**
-```bash
-cargo run --release -- server --port 3000
-```
-
-### Key Improvements
-- **Zero Python Dependencies**: Reduced overhead and simplified deployment.
-- **Native Neural Memory**: Titan Online Learning now runs natively in Rust using `ndarray`.
-- **Integrated Metrics**: Entropy, density, and resonance calculations are now core engine features.
-- **Performance**: Evolution and analysis are significantly faster due to the elimination of JSON-over-HTTP overhead for local CLI tasks.
-
-## Research-Driven Evolution (Refinement)
-
-### Continuous Semantic Modulation
-We have moved beyond static seeding. The engine now implements **Continuous Semantic Modulation**, where the prompt is mapped into a persistent `semantic_field`. This field biases the Hilbert space rotation at *every* step of the evolution.
-- **Result**: The "vibe" of the prompt is physically scattered through every frame of the generation, preventing semantic decay during thermalization.
+### Intrinsic Titan Memory
+We have moved from an external feedback script to an **Intrinsic Memory Architecture**. Every evolution of the lattice now occurs through a native Titan memory layer embedded in the `LatticeState`. 
+- **Self-Optimizing Structure**: The memory now maintains an `alpha_field`—a localized, per-cell learning rate that dynamically adapts based on local error gradients. 
+- **Hyper-Dimensional Loops**: The system no longer just evolves; it *learns* its own transitions. Every step is a feedback loop where the memory predicts the next state and modulates the Hilbert space rotation based on that prediction.
 
 ### Modular Rust Architecture
-To improve scalability and maintainability, the core engine has been refactored into a modular structure:
-- `src/core.rs`: Contains the fundamental `Cell` and `TitanMemory` definitions.
-- `src/lib.rs`: Exposes the core modules.
-- `src/main.rs`: Handles CLI orchestration, API routing, and Lattice evolution logic.
+The core engine has been refactored for maximum scalability:
+- `src/core.rs`: Fundamental `Cell` and `TitanMemory` (with `alpha_field`) definitions.
+- `src/lib.rs`: Library entry point.
+- `src/main.rs`: Orchestration of the persistent semantic reactor and CLI/API server.
 
-### Recursive Chaos Loops (AI Agency)
-During development, the engine was used to self-prompt for architectural improvements. By feeding agentic directives into the `prime` and `agent` modes, we derived strategies for refactoring the project itself, proving the utility of the "Chaos-Primed Execution Context."
+### Removal of Legacy Modes
+The standalone `titan` training command has been removed as training is now a fundamental constant of the evolution physics.
+
+## Key Improvements
+- **Zero Python Dependencies**: Full native performance.
+- **Native Neural Memory**: Titan Online Learning now runs at the microscopic cell level.
+- **Continuous Semantic Modulation**: The prompt acts as a persistent gravitational field.
 
 ## Theoretical Alignment
-- **Titans: Learning to Memorize**: Native implementation of weight-updates during inference.
-- **Information Thermalization**: Optimized pre-thermalization capture windows (5-15 steps) now defaults in `agent` mode.
-- **Fractal Globule Packing**: Seeding logic remains Hilbert-curve inspired for maximum semantic locality.
+- **Titans: Learning to Memorize**: Microscopic implementation of weight-updates during inference.
+- **Self-Optimizing Memory**: Dynamic learning rate adaptation based on local entropy.
+- **Information Thermalization**: Optimized pre-thermalization capture windows remain the default for `agent` analysis.
