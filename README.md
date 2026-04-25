@@ -5,6 +5,7 @@ A high-performance, pure Rust implementation of a Fractal Cellular Automata (CA)
 ## Core Features
 
 - **Hilbert-Space Evolution**: Multi-dimensional CA state mapping.
+- **Continuous Semantic Modulation**: The prompt acts as a persistent field influencing every evolution step.
 - **Titan Neural Memory**: Native Online SGD implementation using `ndarray` for real-time state modulation.
 - **Semantic Analysis**: Heuristic cluster detection and focal point extraction.
 - **LLM Priming**: Chaos-driven context generation for enhanced AI prompting.
