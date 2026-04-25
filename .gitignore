@@ -1,5 +1,5 @@
-engine/target/
-__pycache__/
-*.pyc
+target/
+Cargo.lock
+fractal-ca
+*.npz
 .gemini/
-venv/

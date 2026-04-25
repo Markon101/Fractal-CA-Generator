@@ -1,14 +1,11 @@
-.PHONY: run-engine run-python run-all
+build:
+	cargo build --release
 
-run-engine:
-	cd engine && cargo run
+run:
+	cargo run --release -- server
 
-run-python:
-	python3 python/rl_brain.py
+clean:
+	cargo clean
 
-run-all:
-	@echo "Starting Rust Engine in background..."
-	cd engine && cargo run &
-	@sleep 5
-	@echo "Starting Python RL Brain..."
-	python3 python/rl_brain.py
+test:
+	cargo test
