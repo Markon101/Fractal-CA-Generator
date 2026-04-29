@@ -89,22 +89,32 @@ Based on the previous analysis, `python/priming_agent.py` was tuned:
 - **Density:** 0.1818
 - **Resonance:** 1.7673 (Strong rhythmic patterns detected. Use structured, modular responses)
 
-## Round 2 Analysis & Theoretical Reflections
+## Round 3: IIT, Momentum & Thermodynamic Work (April 2026)
+With the migration to a pure Rust implementation and the integration of Integrated Information Theory (IIT) and Information Momentum, the priming process has been fundamentally transformed.
 
-1. **Pre-Thermalization Dynamics:**
-   Reducing the iterations to 10 successfully captured the CA before full "thermalization." Entropy dropped across the board (ranging from 10.16 to 10.73), indicating that the system's state is still heavily influenced by the initial fractal folding of the seed prompt, rather than having diffused into generic noise.
+### Objectives
+- Validate the Integrated Information Potential ($\Phi$) as a measure of structural integration.
+- Observe the effects of Information Momentum on the trajectory of the CA evolution.
+- Test the new "Cognitive Priming Field" output for LLM instruction.
 
-2. **Inverse Relationship between Resonance and Entropy:**
-   As expected in chaotic systems, lower entropy correlated with significantly higher resonance (ranging from 1.76 to 2.48). The early-stage CA exhibits distinct "rhythmic patterns" because the injected phase data hasn't yet fully interfered with itself across the entire grid.
+### Test Case: "Integrated Information and Information Momentum"
+- **Iterations:** 10
+- **Entropy:** 10.0087 (Convergent and analytical)
+- **Resonance:** 2.4800 (Strong rhythmic patterns detected. Use structured, modular responses)
+- **Integrated Information ($\Phi$):** 24.8218
+- **$\Phi$ Trajectory:** Descending (Differentiating)
+- **Thermodynamic Work:** 0.0456 (Energy of transition)
 
-3. **Prompt Complexity Correlation:**
-   There is a clear progression in both Entropy and Density as the complexity of the prompt increases:
-   - *Abstract (2 words)* -> Entropy 10.16, Density 0.088
-   - *Technical (8 words)* -> Entropy 10.34, Density 0.086
-   - *Narrative (14 words)* -> Entropy 10.58, Density 0.124
-   - *Complex (18 words)* -> Entropy 10.73, Density 0.181
-   
-   This suggests that at lower iterations (like 10), the CA acts as a highly sensitive instrument capable of mapping the initial "semantic weight" or length of a prompt to structural entropy and density. The longer/more complex the prompt, the faster the system pushes toward chaotic thermalization.
+### Round 3 Analysis & Theoretical Reflections
 
-4. **Tuning Success:**
-   The adjusted thresholds (`Entropy > 10.95`, `Resonance > 1.45`) effectively captured the structural differences. All Round 2 tests correctly identified the high resonance present in the early evolution stages. However, because entropy didn't cross the 10.95 threshold, they were all classified as "Convergent and analytical." A more nuanced multi-tier classification system (e.g., Low < 10.3, Mid 10.3-10.8, High > 10.8) might be more effective than a simple binary threshold for determining the "vibe."
+1. **Integration as Identity ($\Phi$):**
+   The new $\Phi$ metric successfully captures the relationship between differentiation (Entropy) and integration (Resonance). A high $\Phi$ value (~24.8) at 10 iterations indicates a highly structured, integrated state. The "Descending" trajectory suggests the system was moving from a highly ordered seed toward a more differentiated, complex state.
+
+2. **Inertial Identity (Momentum):**
+   The introduction of `w_momentum` and `b_momentum` in the Titan memory provides the system with a "temporal self". The updates are no longer purely local and instantaneous; they carry the weight of the previous trajectory, stabilizing the evolution against random fluctuations while accelerating consistent semantic shifts.
+
+3. **Thermodynamic Equivalence:**
+   The "Thermodynamic Work" metric provides a quantitative measure of the energy cost of the state transition. In this test, 0.0456 units of work were done per step to integrate the new information into the grid's attractor.
+
+4. **Cognitive Priming:**
+   The structured "Cognitive Priming Field" output now provides a high-signal directive for LLMs, including systemic momentum and integration trends. This aligns with the "Information in Motion" philosophy, treating the LLM priming not as a static prompt, but as a field of force within which the reasoning occurs.

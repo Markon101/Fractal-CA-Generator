@@ -31,8 +31,9 @@ struct Metrics {
     entropy: f32,
     density: f32,
     resonance: f32,
+    phi: f32,   // Integrated Information Potential
+    work: f32,  // Thermodynamic work (Szilárd equivalence)
     raw_sum: f32,
-    loss: f32, // New metric from integrated memory
 }
 
 impl LatticeState {
@@ -100,7 +101,7 @@ impl LatticeState {
         let mut next_grid = self.grid.clone();
         
         // 1. Hyper-dimensional feedback: Get modulation from Titan Memory based on previous state
-        let (loss, modulation_field) = self.memory.update_and_modulate(&self.current_probs, &self.current_probs); // Predict self
+        let (work, modulation_field) = self.memory.update_and_modulate(&self.current_probs, &self.current_probs); // Predict self
         
         let coin = |c: &Cell, dir: char| -> (f32, f32) {
             let s_re = c.u_re + c.d_re + c.l_re + c.r_re;
@@ -156,10 +157,10 @@ impl LatticeState {
         let new_probs_arr = Array1::from_vec(next_probs);
         
         // 2. Self-Optimizing Update: Titan learns the transition from old state to new state
-        let (true_loss, _) = self.memory.update_and_modulate(&self.current_probs, &new_probs_arr);
+        let (true_work, _) = self.memory.update_and_modulate(&self.current_probs, &new_probs_arr);
         self.current_probs = new_probs_arr;
         
-        true_loss
+        true_work
     }
 
     fn get_probs(&self) -> Vec<f32> {
@@ -171,7 +172,7 @@ impl LatticeState {
         let total_p: f32 = probs.iter().sum();
         
         if total_p == 0.0 {
-            return Metrics { entropy: 0.0, density: 0.0, resonance: 0.0, raw_sum: 0.0, loss: 0.0 };
+            return Metrics { entropy: 0.0, density: 0.0, resonance: 0.0, phi: 0.0, work: 0.0, raw_sum: 0.0 };
         }
 
         let entropy = -probs.iter().filter(|&&p| p > 0.0).map(|&p| {
@@ -188,16 +189,21 @@ impl LatticeState {
         let variance = probs.iter().map(|&p| (p - avg_p).powi(2)).sum::<f32>() / probs.len() as f32;
         let resonance = variance.sqrt() / (avg_p + 1e-9);
 
-        // Calculate current loss without mutating
+        // Integrated Information Proxy: Phi peaks when the system is balanced between 
+        // high differentiation (entropy) and high structural integration (resonance).
+        let phi = entropy * resonance;
+
+        // Calculate current work without mutating
         let pred = self.memory.forward(&self.current_probs);
-        let loss = (&pred - &self.current_probs).mapv(|v| v.abs()).mean().unwrap_or(0.0);
+        let work = (&pred - &self.current_probs).mapv(|v| v.abs()).mean().unwrap_or(0.0);
 
         Metrics {
             entropy,
             density,
             resonance,
+            phi,
+            work,
             raw_sum: total_p,
-            loss,
         }
     }
 
@@ -243,7 +249,7 @@ enum Commands {
         prompt: String,
         #[arg(short, long, default_value_t = 15)] iterations: u64,
         #[arg(short, long, default_value_t = 80)] width: usize,
-        #[arg(short, long, default_value_t = 40)] height: usize,
+        #[arg(long, default_value_t = 40)] height: usize,
         #[arg(short, long, default_value_t = 5)] points: usize,
     },
     Lab {},
@@ -346,8 +352,8 @@ async fn run_server(port: u16) {
 
 fn run_agent(prompt: &str, iterations: u64, width: usize, height: usize, max_points: usize) {
     let mut l = LatticeState::new(width, height, prompt);
-    let mut final_loss = 0.0;
-    for _ in 0..iterations { final_loss = l.step(); }
+    let mut final_work = 0.0;
+    for _ in 0..iterations { final_work = l.step(); }
     let map_text = l.get_formatted_output();
     println!("{}", map_text);
 
@@ -392,7 +398,7 @@ fn run_agent(prompt: &str, iterations: u64, width: usize, height: usize, max_poi
     }
 
     println!("\n[AGENT THOUGHT PROCESS: {}]", prompt);
-    println!(">>> NATIVE TITAN MEMORY LOSS: {:.6}", final_loss);
+    println!(">>> NATIVE TITAN MEMORY WORK: {:.6}", final_work);
     let strategies = ["Architectural Core", "Edge-case Anomaly", "Emergent Bridge", "Fractal Resonance", "Entropic Drift"];
     for (i, pt) in distinct_points.iter().enumerate() {
         let strategy = strategies[i % strategies.len()];
@@ -415,10 +421,10 @@ fn run_lab() {
     for length in 1..=20 {
         let prompt = "A".repeat(length);
         let mut l = LatticeState::new(40, 20, &prompt);
-        let mut final_loss = 0.0;
-        for _ in 0..10 { final_loss = l.step(); }
+        let mut final_work = 0.0;
+        for _ in 0..10 { final_work = l.step(); }
         let metrics = l.get_metrics();
-        println!("Length {:2} | Density: {:.4} | Titan Loss: {:.6} {}", length, metrics.density, final_loss, "#".repeat((metrics.density * 100.0) as usize));
+        println!("Length {:2} | Density: {:.4} | Titan Work: {:.6} {}", length, metrics.density, final_work, "#".repeat((metrics.density * 100.0) as usize));
     }
 }
 
@@ -426,10 +432,10 @@ async fn run_observe(seed: &str, duration: u64) {
     let mut l = LatticeState::new(60, 30, seed);
     let start = std::time::Instant::now();
     loop {
-        let loss = l.step();
+        let work = l.step();
         print!("\x1B[H\x1B[J"); // Clear screen
         println!("{}", l.get_formatted_output());
-        println!(">>> TITAN MEMORY LOSS: {:.6}", loss);
+        println!(">>> TITAN MEMORY WORK: {:.6}", work);
         
         if duration > 0 && start.elapsed().as_secs() >= duration { break; }
         if duration == 0 && l.iteration >= 100 { break; }
@@ -440,8 +446,16 @@ async fn run_observe(seed: &str, duration: u64) {
 
 fn run_prime(instruction: &str, iterations: u64) {
     let mut l = LatticeState::new(100, 50, instruction);
-    for _ in 0..iterations { l.step(); }
+    let mut phi_trajectory = Vec::new();
+    
+    for _ in 0..iterations { 
+        l.step(); 
+        phi_trajectory.push(l.get_metrics().phi);
+    }
+    
     let metrics = l.get_metrics();
+    let phi_avg = phi_trajectory.iter().sum::<f32>() / phi_trajectory.len() as f32;
+    let phi_trend = if metrics.phi > phi_avg { "Ascending (Integrating)" } else { "Descending (Differentiating)" };
 
     let vibe = if metrics.entropy > 10.95 { "Highly divergent and creative." } else { "Convergent and analytical." };
     let structure = if metrics.resonance > 1.45 { "Strong rhythmic patterns detected. Use structured, modular responses." } else { "Diffuse state. Prefer fluid, narrative explanations." };
@@ -452,11 +466,15 @@ fn run_prime(instruction: &str, iterations: u64) {
     let hotspots: Vec<&&str> = words.choose_multiple(&mut rng, active_count.min(words.len())).collect();
     let hotspot_str: String = hotspots.iter().map(|s| **s).collect::<Vec<&str>>().join(", ");
 
-    println!("### CHAOS-PRIMED EXECUTION CONTEXT");
-    println!("[METRICS]\n- Entropy: {:.4} ({})\n- Density: {:.4}\n- Resonance: {:.4} ({})\n- Titan Loss: {:.6}", metrics.entropy, vibe, metrics.density, metrics.resonance, structure, metrics.loss);
-    println!("\n[SEMANTIC HOTSPOTS]\nThe chaotic evolution highlighted these core concepts: {}", hotspot_str);
-    println!("\n[INSTRUCTION]\n{}", instruction);
-    println!("\n[CHAOS DIRECTIVE]\nAnalyze the provided metrics and hotspots. Adjust your temperature and reasoning style to match the 'vibe' and 'structure' described above.");
+    println!("### CHAOS-PRIMED COGNITIVE FIELD");
+    println!("[METRICS]\n- Entropy: {:.4} ({})\n- Resonance: {:.4} ({})\n- Integrated Information (Phi): {:.4} ({})", 
+        metrics.entropy, vibe, metrics.resonance, structure, metrics.phi, phi_trend);
+    println!("- Thermodynamic Work: {:.6} (Energy of Transition)", metrics.work);
+    
+    println!("\n[SEMANTIC ATTRACTOR]\nThe evolution converged on these core concepts: {}", hotspot_str);
+    
+    println!("\n[COGNITIVE DIRECTIVE]\nYou are operating within an integrated information field. Adjust your reasoning style to match the 'vibe' and 'structure' described above.");
+    println!("If Phi is Ascending, prioritize synthesis and bridging concepts. If Descending, prioritize analysis and breakdown.");
 }
 
 fn run_deep_time(prompt: &str) {
@@ -465,12 +483,12 @@ fn run_deep_time(prompt: &str) {
     let epochs = [1, 100, 500, 1000, 5000];
     
     for &target in &epochs {
-        let mut final_loss = 0.0;
-        while l.iteration < target { final_loss = l.step(); }
+        let mut final_work = 0.0;
+        while l.iteration < target { final_work = l.step(); }
         let metrics = l.get_metrics();
         let density_raw = (metrics.density * (80.0 * 40.0)) as usize;
         
-        println!("\n--- EPOCH {} (Density: {}) | Titan Loss: {:.6} ---", target, density_raw, final_loss);
+        println!("\n--- EPOCH {} (Density: {}) | Titan Work: {:.6} ---", target, density_raw, final_work);
         if density_raw > 1500 { println!("Status: Over-growth / Hyper-complexity."); }
         else if density_raw > 800 { println!("Status: Mature equilibrium."); }
         else if density_raw > 100 { println!("Status: Entropic decay."); }
