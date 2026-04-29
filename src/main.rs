@@ -24,6 +24,7 @@ struct LatticeState {
     semantic_field: Vec<f32>,   // Constant prompt influence
     memory: TitanMemory,        // HYPER-DIMENSIONAL FEEDBACK LOOP
     current_probs: Array1<f32>, // Store state for gradient updates
+    cumulative_complexity: f32, // The Arrow of Time: Accumulated state rotations
 }
 
 #[derive(Serialize, Debug)]
@@ -33,6 +34,7 @@ struct Metrics {
     resonance: f32,
     phi: f32,   // Integrated Information Potential
     work: f32,  // Thermodynamic work (Szilárd equivalence)
+    state_complexity: f32, // The Arrow of Time
     raw_sum: f32,
 }
 
@@ -94,6 +96,7 @@ impl LatticeState {
             semantic_field,
             memory: TitanMemory::new(size, 0.01),
             current_probs: Array1::from_vec(initial_probs),
+            cumulative_complexity: 0.0,
         }
     }
 
@@ -116,6 +119,7 @@ impl LatticeState {
         };
 
         let mut next_probs = Vec::with_capacity(self.width * self.height);
+        let mut step_complexity = 0.0;
 
         for y in 0..self.height {
             for x in 0..self.width {
@@ -138,6 +142,8 @@ impl LatticeState {
                 
                 // Hyper-dimensional rotation: Driven by semantic prompt and Neural Memory
                 let theta = p * 10.0 * (1.0 + mod_val) * (1.0 + sem_val * 2.0); 
+                step_complexity += theta.abs();
+                
                 let (cos_t, sin_t) = (theta.cos(), theta.sin());
                 
                 let rotate = |re: f32, im: f32| (re * cos_t - im * sin_t, re * sin_t + im * cos_t);
@@ -152,6 +158,7 @@ impl LatticeState {
         }
         
         self.grid = next_grid;
+        self.cumulative_complexity += step_complexity;
         self.iteration += 1;
         
         let new_probs_arr = Array1::from_vec(next_probs);
@@ -172,7 +179,7 @@ impl LatticeState {
         let total_p: f32 = probs.iter().sum();
         
         if total_p == 0.0 {
-            return Metrics { entropy: 0.0, density: 0.0, resonance: 0.0, phi: 0.0, work: 0.0, raw_sum: 0.0 };
+            return Metrics { entropy: 0.0, density: 0.0, resonance: 0.0, phi: 0.0, work: 0.0, state_complexity: self.cumulative_complexity, raw_sum: 0.0 };
         }
 
         let entropy = -probs.iter().filter(|&&p| p > 0.0).map(|&p| {
@@ -203,6 +210,7 @@ impl LatticeState {
             resonance,
             phi,
             work,
+            state_complexity: self.cumulative_complexity,
             raw_sum: total_p,
         }
     }
@@ -433,9 +441,10 @@ async fn run_observe(seed: &str, duration: u64) {
     let start = std::time::Instant::now();
     loop {
         let work = l.step();
+        let metrics = l.get_metrics();
         print!("\x1B[H\x1B[J"); // Clear screen
         println!("{}", l.get_formatted_output());
-        println!(">>> TITAN MEMORY WORK: {:.6}", work);
+        println!(">>> TITAN MEMORY WORK: {:.6} | ARROW OF TIME (Complexity): {:.2}", work, metrics.state_complexity);
         
         if duration > 0 && start.elapsed().as_secs() >= duration { break; }
         if duration == 0 && l.iteration >= 100 { break; }
@@ -470,6 +479,7 @@ fn run_prime(instruction: &str, iterations: u64) {
     println!("[METRICS]\n- Entropy: {:.4} ({})\n- Resonance: {:.4} ({})\n- Integrated Information (Phi): {:.4} ({})", 
         metrics.entropy, vibe, metrics.resonance, structure, metrics.phi, phi_trend);
     println!("- Thermodynamic Work: {:.6} (Energy of Transition)", metrics.work);
+    println!("- State Complexity (Arrow of Time): {:.2} (Accumulated Phase Rotations)", metrics.state_complexity);
     
     println!("\n[SEMANTIC ATTRACTOR]\nThe evolution converged on these core concepts: {}", hotspot_str);
     

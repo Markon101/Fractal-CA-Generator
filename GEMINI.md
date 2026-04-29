@@ -15,8 +15,9 @@ The system now natively calculates an **Integrated Information Potential ($\Phi$
 - **The Only Real**: Aligning with IIT, the system's identity is defined by its integration. $\Phi$ peaks at the "edge of chaos," where entropy (differentiation) and resonance (integration) are balanced.
 - **Cognitive Priming Fields**: The `prime` command now generates a structured cognitive field based on $\Phi$ trajectory and semantic attractors, providing a high-signal directive for LLM priming.
 
-### Information Thermodynamics
+### Information Thermodynamics & The Arrow of Time
 - **Szilárd's Equivalence**: The "loss" in the memory is now treated as **Thermodynamic Work** ($kT \ln 2$), representing the energy required to move information across the phase space.
+- **The Arrow of Time (State Complexity)**: Based on theories of quantum complexity, the engine tracks the macroscopic flow of time by measuring the continuous, monotonic growth of `state_complexity` (accumulated phase rotations). As complexity increases, the system moves forward along the thermodynamic arrow of time.
 - **The Attractor as Energy**: Information in motion *is* the energy. The CA evolution is the physical manifestation of this work.
 
 ### Modular Rust Architecture
