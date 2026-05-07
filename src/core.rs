@@ -24,6 +24,10 @@ impl Cell {
     }
 }
 
+use safetensors::tensor::{Dtype, TensorView, SafeTensors};
+use safetensors::serialize_to_file;
+use std::collections::HashMap;
+
 // Hyper-dimensional, self-optimizing memory structure with Information Momentum
 #[derive(Clone)]
 pub struct TitanMemory {
@@ -49,6 +53,51 @@ impl TitanMemory {
             w, b, w_momentum, b_momentum, alpha_field, base_lr,
             momentum_beta: 0.9 
         }
+    }
+
+    pub fn save(&self, path: &str) -> std::io::Result<()> {
+        let w_bytes: &[u8] = bytemuck::cast_slice(self.w.as_slice().unwrap());
+        let b_bytes: &[u8] = bytemuck::cast_slice(self.b.as_slice().unwrap());
+        let w_mom_bytes: &[u8] = bytemuck::cast_slice(self.w_momentum.as_slice().unwrap());
+        let b_mom_bytes: &[u8] = bytemuck::cast_slice(self.b_momentum.as_slice().unwrap());
+        let alpha_bytes: &[u8] = bytemuck::cast_slice(self.alpha_field.as_slice().unwrap());
+
+        let mut data = HashMap::new();
+        data.insert("w".to_string(), TensorView::new(Dtype::F32, vec![self.w.len()], w_bytes).unwrap());
+        data.insert("b".to_string(), TensorView::new(Dtype::F32, vec![self.b.len()], b_bytes).unwrap());
+        data.insert("w_momentum".to_string(), TensorView::new(Dtype::F32, vec![self.w_momentum.len()], w_mom_bytes).unwrap());
+        data.insert("b_momentum".to_string(), TensorView::new(Dtype::F32, vec![self.b_momentum.len()], b_mom_bytes).unwrap());
+        data.insert("alpha_field".to_string(), TensorView::new(Dtype::F32, vec![self.alpha_field.len()], alpha_bytes).unwrap());
+
+        serialize_to_file(&data, None::<HashMap<String, String>>, std::path::Path::new(path)).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        Ok(())
+    }
+
+    pub fn load(path: &str, base_lr: f32) -> std::io::Result<Self> {
+        let buffer = std::fs::read(path)?;
+        let tensors = SafeTensors::deserialize(&buffer).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+
+        let get_arr = |name: &str| -> std::io::Result<Array1<f32>> {
+            let tensor = tensors.tensor(name).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+            let slice: &[f32] = bytemuck::cast_slice(tensor.data());
+            Ok(Array1::from_vec(slice.to_vec()))
+        };
+
+        let w = get_arr("w")?;
+        let b = get_arr("b")?;
+        let w_momentum = get_arr("w_momentum")?;
+        let b_momentum = get_arr("b_momentum")?;
+        let alpha_field = get_arr("alpha_field")?;
+
+        Ok(TitanMemory {
+            w,
+            b,
+            w_momentum,
+            b_momentum,
+            alpha_field,
+            base_lr,
+            momentum_beta: 0.9,
+        })
     }
 
     pub fn forward(&self, x: &Array1<f32>) -> Array1<f32> {

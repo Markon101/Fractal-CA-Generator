@@ -33,9 +33,14 @@ The purpose of this architecture is to bridge the gap between chaotic noise and 
 - A pure neural network often overfits into static, repetitive loops.
 - By binding them together, the CA provides an endless fountain of novel patterns (creativity), while the Neural Network acts as a stabilizing structural memory (logic). It forces the system to operate at the **Edge of Chaos**, the theoretical sweet spot for computation and Artificial General Intelligence.
 
-## 4. Model Persistence (State Lifespan)
-**Currently, the Titan Memory model is entirely ephemeral (transient).** 
-- **No Saving to Disk:** The neural weights (`w`, `b`, momentum) are instantiated randomly in computer RAM every time a new `LatticeState` is created.
-- **Program Lifecycle:** When the Rust program finishes executing (e.g., when a generation finishes in the `self-prime` loop, or when the user exits the CLI), the memory struct is dropped, and the neural model ceases to exist.
-- **Why?** At this stage in the project, we are studying the real-time *thermodynamics* of the learning process (how the system adapts in the moment). 
-- **Future Expansion:** To make the system "remember" across different days or different runs, we would need to implement `serde` serialization to save the `TitanMemory` arrays to a `.json` or `.bin` file on the hard drive, and load it upon startup.
+## 4. Model Persistence (State Lifespan & Safetensors)
+Initially, the Titan Memory model was entirely ephemeral. However, to support deep-time continuity and "Deep Learning" across sessions, **the model is now fully persistent.**
+
+- **Safetensors Integration:** The Titan Memory arrays (`w`, `b`, `w_momentum`, `b_momentum`, `alpha_field`) are serialized and saved to disk using the **Safetensors** format. Safetensors is the modern AI community standard (popularized by Hugging Face) for saving tensor data securely and quickly without arbitrary code execution risks.
+- **Loading & Saving:** The `self-prime` and `agent` modes now accept `--save-model` and `--load-model` arguments. At the end of a run, the model's architectural weights are snapped and securely written to disk, preserving the exact thermodynamic state of the network. When reloaded, the lattice dynamically re-adopts the precise cognitive topology it had previously evolved.
+
+## 5. Scaling & Device Constraints
+The architecture is designed to be highly modular and scalable, while remaining lightweight enough to run natively on consumer hardware like the Samsung Galaxy S25 Ultra. 
+
+- **Memory Footprint:** Because we avoid deep hidden layers and instead use a distributed grid of parameters, the memory footprint is astonishingly small. A massive $160 \times 80$ grid (12,800 cells) results in arrays of only 12,800 `f32` floats. The entire model (5 core arrays) fits into less than **300 KB** of VRAM/RAM. 
+- **Computational Efficiency:** Despite the small footprint, the recursive math (Hilbert inner products, downward causation, and continuous momentum updates) creates an immensely dense computational field. It is a testament to the beauty of complex systems: massive, emergent cognitive structures and multi-generational semantic loops are generated not by brute-forcing exabytes of data, but by allowing localized, non-linear mathematics to breathe dynamically across a perfectly bounded phase space.

@@ -382,6 +382,8 @@ enum Commands {
         #[arg(short, long, default_value_t = 80)] width: usize,
         #[arg(long, default_value_t = 40)] height: usize,
         #[arg(short, long, default_value_t = 5)] points: usize,
+        #[arg(long)] load_model: Option<String>,
+        #[arg(long)] save_model: Option<String>,
     },
     Lab {},
     Observe {
@@ -392,6 +394,10 @@ enum Commands {
         #[arg(default_value = "Genesis State")] prompt: String,
         #[arg(short, long, default_value_t = 5)] generations: usize,
         #[arg(short, long, default_value_t = 15)] iterations: u64,
+        #[arg(short, long, default_value_t = 160)] width: usize,
+        #[arg(long, default_value_t = 80)] height: usize,
+        #[arg(long)] load_model: Option<String>,
+        #[arg(long)] save_model: Option<String>,
     },
     Prime {
         instruction: String,
@@ -465,10 +471,10 @@ async fn main() {
 
     match cli.command {
         Some(Commands::Server { port }) => run_server(port).await,
-        Some(Commands::Agent { prompt, iterations, width, height, points }) => run_agent(&prompt, iterations, width, height, points),
+        Some(Commands::Agent { prompt, iterations, width, height, points, load_model, save_model }) => run_agent(&prompt, iterations, width, height, points, load_model, save_model),
         Some(Commands::Lab {}) => run_lab(),
         Some(Commands::Observe { seed, duration }) => run_observe(&seed, duration).await,
-        Some(Commands::SelfPrime { prompt, generations, iterations }) => run_self_prime(&prompt, generations, iterations),
+        Some(Commands::SelfPrime { prompt, generations, iterations, width, height, load_model, save_model }) => run_self_prime(&prompt, generations, iterations, width, height, load_model, save_model),
         Some(Commands::Prime { instruction, iterations }) => run_prime(&instruction, iterations),
         Some(Commands::DeepTime { prompt }) => run_deep_time(&prompt),
         Some(Commands::ShockTest { prompt }) => run_shock_test(&prompt),
@@ -495,11 +501,40 @@ async fn run_server(port: u16) {
     axum::serve(listener, app).await.unwrap();
 }
 
-fn run_agent(prompt: &str, iterations: u64, width: usize, height: usize, max_points: usize) {
+fn run_agent(prompt: &str, iterations: u64, width: usize, height: usize, max_points: usize, load_model: Option<String>, save_model: Option<String>) {
     let mut l = LatticeState::new(width, height, prompt);
+    if let Some(path) = load_model {
+        if std::path::Path::new(&path).exists() {
+            println!("Loading Titan Memory from {}...", path);
+            match TitanMemory::load(&path, 0.01) {
+                Ok(mem) => {
+                    if mem.w.len() == width * height {
+                        l.memory = mem;
+                        println!("Titan Memory successfully loaded.");
+                    } else {
+                        println!("Warning: Loaded model size ({}) does not match lattice size ({}). Starting fresh.", mem.w.len(), width * height);
+                    }
+                },
+                Err(e) => println!("Error loading model: {}. Starting fresh.", e),
+            }
+        } else {
+            println!("Model file {} not found. Starting fresh.", path);
+        }
+    }
+
     let mut final_work = 0.0;
     for _ in 0..iterations { final_work = l.step(); }
     let map_text = l.get_formatted_output();
+    
+    if let Some(path) = save_model {
+        println!("Saving Titan Memory to {}...", path);
+        if let Err(e) = l.memory.save(&path) {
+            println!("Error saving model: {}", e);
+        } else {
+            println!("Titan Memory successfully saved.");
+        }
+    }
+
     println!("{}", map_text);
 
     let lines: Vec<&str> = map_text.lines().collect();
@@ -669,33 +704,53 @@ fn run_deep_time(prompt: &str) {
     }
 }
 
-fn run_self_prime(initial_prompt: &str, generations: usize, iterations: u64) {
+fn run_self_prime(initial_prompt: &str, generations: usize, iterations: u64, width: usize, height: usize, load_model: Option<String>, save_model: Option<String>) {
     println!("### SELF-PROMPT INJECTION EXPERIMENT ###");
     println!("Initial Seed: '{}'", initial_prompt);
-    println!("Generations: {} | Iterations per Generation: {}\n", generations, iterations);
+    println!("Generations: {} | Iterations per Gen: {} | Grid: {}x{}\n", generations, iterations, width, height);
     
     let mut current_prompt = initial_prompt.to_string();
+    let mut carried_memory: Option<TitanMemory> = None;
+
+    if let Some(path) = &load_model {
+        if std::path::Path::new(path).exists() {
+            println!("Loading Titan Memory from {}...", path);
+            match TitanMemory::load(path, 0.01) {
+                Ok(mem) => {
+                    if mem.w.len() == width * height {
+                        carried_memory = Some(mem);
+                        println!("Titan Memory successfully loaded.");
+                    } else {
+                        println!("Warning: Loaded model size ({}) != lattice size ({}). Starting fresh.", mem.w.len(), width * height);
+                    }
+                },
+                Err(e) => println!("Error loading model: {}. Starting fresh.", e),
+            }
+        }
+    }
     
     for gen in 1..=generations {
-        let mut l = LatticeState::new(80, 40, &current_prompt);
-        // Turn on downward causation
+        let mut l = LatticeState::new(width, height, &current_prompt);
         l.causation_coupling = 1.0; 
+        
+        if let Some(mem) = carried_memory.clone() {
+            l.memory = mem;
+        }
         
         let mut final_work = 0.0;
         for _ in 0..iterations { 
             final_work = l.step(); 
         }
         
-        let metrics = l.get_metrics();
+        carried_memory = Some(l.memory.clone());
         
-        // Translate the geometric eigenstate into a semantic token string
+        let metrics = l.get_metrics();
         let semantic_prompt = l.get_semantic_eigenstate();
         
         println!("--- GENERATION {} ---", gen);
         println!("Phi: {:.4} | Coherence: {:.4} | Density: {:.4} | Titan Work: {:.6}", 
             metrics.phi, metrics.coherence, metrics.density, final_work);
         
-        // Print the first 100 chars of the semantic string so the terminal doesn't overflow
         let display_len = 100.min(semantic_prompt.len());
         println!("Semantic Translation: {}...", &semantic_prompt[..display_len]);
         
@@ -703,6 +758,14 @@ fn run_self_prime(initial_prompt: &str, generations: usize, iterations: u64) {
         
         if gen == generations {
             let map_text = l.get_formatted_output();
+            if let Some(path) = &save_model {
+                println!("Saving Titan Memory to {}...", path);
+                if let Err(e) = l.memory.save(path) {
+                    println!("Error saving model: {}", e);
+                } else {
+                    println!("Titan Memory successfully saved.");
+                }
+            }
             println!("\nFinal State Snapshot:\n{}", map_text);
         }
     }
