@@ -33,3 +33,10 @@ To improve the resilience of injected prompts, we look to the **Fractal Globule 
 - **Fractal Folding:** By using space-filling curves (like the Hilbert curve) to map prompt embeddings into the CA grid, we can ensure that semantic relationships in the text are preserved as spatial relationships in the chaos, slowing the rate of entropic decay.
 - **Citations:**
     - Lieberman-Aiden et al. (2009). "Comprehensive Mapping of Long-Range Interactions Reveals Folding Principles of the Human Genome." Science 326.
+
+## 5. Recursive Renormalization & Downward Causation
+To enhance the emergence of macro-structures, the system implements a recursive renormalization loop operating in a complex Hilbert space.
+
+- **Renormalization Group (RG) Flow:** Inspired by quantum field theory and statistical mechanics, the micro-grid of cells is coarse-grained by integrating the complex amplitudes of $2 \times 2$ blocks. These blocks are normalized, forming macroscopic "Hilbert states."
+- **Downward Causation:** The macroscopic state exercises a feedback force on the microscopic components. The rotation ($\theta$) of each micro-cell is modulated by the complex inner product (overlap) between the micro-cell and its parent macro-cell.
+- **Emergence Stabilization:** This mechanism acts as an algorithmic structural constraint. It bridges scale hierarchies, ensuring that localized interactions (micro-scale) resonate with regional coherences (macro-scale), effectively maintaining the CA at a self-organizing criticality.

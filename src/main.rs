@@ -25,6 +25,7 @@ struct LatticeState {
     memory: TitanMemory,        // HYPER-DIMENSIONAL FEEDBACK LOOP
     current_probs: Array1<f32>, // Store state for gradient updates
     cumulative_complexity: f32, // The Arrow of Time: Accumulated state rotations
+    causation_coupling: f32,    // Multiplier for downward causation recursion phase
 }
 
 #[derive(Serialize, Debug)]
@@ -36,6 +37,7 @@ struct Metrics {
     work: f32,  // Thermodynamic work (Szilárd equivalence)
     state_complexity: f32, // The Arrow of Time
     raw_sum: f32,
+    coherence: f32, // Hilbert phase coherence
 }
 
 impl LatticeState {
@@ -97,6 +99,7 @@ impl LatticeState {
             memory: TitanMemory::new(size, 0.01),
             current_probs: Array1::from_vec(initial_probs),
             cumulative_complexity: 0.0,
+            causation_coupling: 1.0,
         }
     }
 
@@ -106,6 +109,39 @@ impl LatticeState {
         // 1. Hyper-dimensional feedback: Get modulation from Titan Memory based on previous state
         let (work, modulation_field) = self.memory.update_and_modulate(&self.current_probs, &self.current_probs); // Predict self
         
+        // 1.5. Renormalization Group (Hilbert Space macro-states)
+        let macro_width = self.width / 2;
+        let macro_height = self.height / 2;
+        let mut macro_grid = vec![vec![Cell::new(); macro_width]; macro_height];
+        
+        if macro_width > 0 && macro_height > 0 {
+            for y in 0..self.height {
+                for x in 0..self.width {
+                    let c = &self.grid[y][x];
+                    let my = y / 2;
+                    let mx = x / 2;
+                    if my < macro_height && mx < macro_width {
+                        let mc = &mut macro_grid[my][mx];
+                        mc.u_re += c.u_re; mc.u_im += c.u_im;
+                        mc.d_re += c.d_re; mc.d_im += c.d_im;
+                        mc.l_re += c.l_re; mc.l_im += c.l_im;
+                        mc.r_re += c.r_re; mc.r_im += c.r_im;
+                    }
+                }
+            }
+            // Normalize macro cells (Renormalization step)
+            for my in 0..macro_height {
+                for mx in 0..macro_width {
+                    let mc = &mut macro_grid[my][mx];
+                    let mag = (mc.prob() + 1e-9).sqrt();
+                    mc.u_re /= mag; mc.u_im /= mag;
+                    mc.d_re /= mag; mc.d_im /= mag;
+                    mc.l_re /= mag; mc.l_im /= mag;
+                    mc.r_re /= mag; mc.r_im /= mag;
+                }
+            }
+        }
+
         let coin = |c: &Cell, dir: char| -> (f32, f32) {
             let s_re = c.u_re + c.d_re + c.l_re + c.r_re;
             let s_im = c.u_im + c.d_im + c.l_im + c.r_im;
@@ -140,8 +176,22 @@ impl LatticeState {
                 let mod_val = modulation_field[idx];
                 let sem_val = self.semantic_field[idx];
                 
-                // Hyper-dimensional rotation: Driven by semantic prompt and Neural Memory
-                let theta = p * 10.0 * (1.0 + mod_val) * (1.0 + sem_val * 2.0); 
+                // Downward causation via recursive Hilbert inner product
+                let mut recursion_phase = 0.0;
+                if macro_width > 0 && macro_height > 0 {
+                    let my = (y / 2).min(macro_height - 1);
+                    let mx = (x / 2).min(macro_width - 1);
+                    let mc = &macro_grid[my][mx];
+                    // Complex inner product Re(<cell, macro_cell>)
+                    let overlap = cell.u_re * mc.u_re + cell.u_im * mc.u_im +
+                                  cell.d_re * mc.d_re + cell.d_im * mc.d_im +
+                                  cell.l_re * mc.l_re + cell.l_im * mc.l_im +
+                                  cell.r_re * mc.r_re + cell.r_im * mc.r_im;
+                    recursion_phase = overlap;
+                }
+
+                // Hyper-dimensional rotation: Driven by semantic prompt, Neural Memory, and Recursive Renormalization
+                let theta = p * 10.0 * (1.0 + mod_val) * (1.0 + sem_val * 2.0) * (1.0 + recursion_phase * self.causation_coupling); 
                 step_complexity += theta.abs();
                 
                 let (cos_t, sin_t) = (theta.cos(), theta.sin());
@@ -179,7 +229,7 @@ impl LatticeState {
         let total_p: f32 = probs.iter().sum();
         
         if total_p == 0.0 {
-            return Metrics { entropy: 0.0, density: 0.0, resonance: 0.0, phi: 0.0, work: 0.0, state_complexity: self.cumulative_complexity, raw_sum: 0.0 };
+            return Metrics { entropy: 0.0, density: 0.0, resonance: 0.0, phi: 0.0, work: 0.0, state_complexity: self.cumulative_complexity, raw_sum: 0.0, coherence: 0.0 };
         }
 
         let entropy = -probs.iter().filter(|&&p| p > 0.0).map(|&p| {
@@ -204,6 +254,29 @@ impl LatticeState {
         let pred = self.memory.forward(&self.current_probs);
         let work = (&pred - &self.current_probs).mapv(|v| v.abs()).mean().unwrap_or(0.0);
 
+        // Calculate Hilbert Phase Coherence
+        let mut coherence_sum = 0.0;
+        let mut pairs = 0.0;
+        for y in 0..self.height {
+            for x in 0..self.width {
+                let c1 = &self.grid[y][x];
+                let c_right = &self.grid[y][(x + 1) % self.width];
+                let c_down = &self.grid[(y + 1) % self.height][x];
+
+                let overlap_r = c1.u_re * c_right.u_re + c1.u_im * c_right.u_im +
+                                c1.d_re * c_right.d_re + c1.d_im * c_right.d_im +
+                                c1.l_re * c_right.l_re + c1.l_im * c_right.l_im +
+                                c1.r_re * c_right.r_re + c1.r_im * c_right.r_im;
+                let overlap_d = c1.u_re * c_down.u_re + c1.u_im * c_down.u_im +
+                                c1.d_re * c_down.d_re + c1.d_im * c_down.d_im +
+                                c1.l_re * c_down.l_re + c1.l_im * c_down.l_im +
+                                c1.r_re * c_down.r_re + c1.r_im * c_down.r_im;
+                coherence_sum += overlap_r.abs() + overlap_d.abs();
+                pairs += 2.0;
+            }
+        }
+        let coherence = if pairs > 0.0 { coherence_sum / pairs } else { 0.0 };
+
         Metrics {
             entropy,
             density,
@@ -212,6 +285,7 @@ impl LatticeState {
             work,
             state_complexity: self.cumulative_complexity,
             raw_sum: total_p,
+            coherence,
         }
     }
 
@@ -237,6 +311,55 @@ impl LatticeState {
             output.push('\n');
         }
         output
+    }
+
+    fn get_semantic_eigenstate(&self) -> String {
+        let words: Vec<&str> = include_str!("words.txt").lines().collect();
+        let vocab_size = words.len() as f32;
+        
+        let mut eigen_prompt = Vec::new();
+        
+        // Coarse grain the grid into 8x8 macro-regions
+        let macro_size = 8;
+        let regions_y = self.height / macro_size;
+        let regions_x = self.width / macro_size;
+        
+        for ry in 0..regions_y {
+            for rx in 0..regions_x {
+                let mut sum_re = 0.0;
+                let mut sum_im = 0.0;
+                let mut total_prob = 0.0;
+                
+                for dy in 0..macro_size {
+                    for dx in 0..macro_size {
+                        let y = ry * macro_size + dy;
+                        let x = rx * macro_size + dx;
+                        if y < self.height && x < self.width {
+                            let cell = &self.grid[y][x];
+                            // Use the Up component as the primary phase vector, weighted by cell probability
+                            let p = cell.prob();
+                            sum_re += cell.u_re * p;
+                            sum_im += cell.u_im * p;
+                            total_prob += p;
+                        }
+                    }
+                }
+                
+                if total_prob > 0.1 { // Only extract words from active regions
+                    let phase = sum_im.atan2(sum_re); // -PI to PI
+                    let normalized_phase = (phase + std::f32::consts::PI) / (2.0 * std::f32::consts::PI); // 0.0 to 1.0
+                    let word_idx = (normalized_phase * vocab_size) as usize;
+                    let word_idx = word_idx.clamp(0, words.len() - 1);
+                    eigen_prompt.push(words[word_idx]);
+                }
+            }
+        }
+        
+        if eigen_prompt.is_empty() {
+            "void".to_string()
+        } else {
+            eigen_prompt.join(" ")
+        }
     }
 }
 
@@ -264,6 +387,11 @@ enum Commands {
     Observe {
         seed: String,
         #[arg(short, long, default_value_t = 0)] duration: u64,
+    },
+    SelfPrime {
+        #[arg(default_value = "Genesis State")] prompt: String,
+        #[arg(short, long, default_value_t = 5)] generations: usize,
+        #[arg(short, long, default_value_t = 15)] iterations: u64,
     },
     Prime {
         instruction: String,
@@ -334,6 +462,7 @@ async fn main() {
         Some(Commands::Agent { prompt, iterations, width, height, points }) => run_agent(&prompt, iterations, width, height, points),
         Some(Commands::Lab {}) => run_lab(),
         Some(Commands::Observe { seed, duration }) => run_observe(&seed, duration).await,
+        Some(Commands::SelfPrime { prompt, generations, iterations }) => run_self_prime(&prompt, generations, iterations),
         Some(Commands::Prime { instruction, iterations }) => run_prime(&instruction, iterations),
         Some(Commands::DeepTime { prompt }) => run_deep_time(&prompt),
         None => { run_server(3000).await; }
@@ -434,6 +563,18 @@ fn run_lab() {
         let metrics = l.get_metrics();
         println!("Length {:2} | Density: {:.4} | Titan Work: {:.6} {}", length, metrics.density, final_work, "#".repeat((metrics.density * 100.0) as usize));
     }
+
+    println!("\n[Test 3: Hilbert Phase Coherence & Downward Causation Sweep]");
+    let couplings = [0.0, 0.5, 1.0, 2.0, 5.0, 10.0];
+    for &coupling in &couplings {
+        let mut l = LatticeState::new(40, 20, "Hilbert Coherence Core");
+        l.causation_coupling = coupling;
+        for _ in 0..20 { l.step(); }
+        let metrics = l.get_metrics();
+        println!("Coupling: {:4.1} | Coherence: {:.4} | Phi: {:.4} | Density: {:.4} {}", 
+            coupling, metrics.coherence, metrics.phi, metrics.density, 
+            "*".repeat((metrics.coherence * 50.0).max(0.0) as usize));
+    }
 }
 
 async fn run_observe(seed: &str, duration: u64) {
@@ -517,5 +658,44 @@ fn run_deep_time(prompt: &str) {
             }
         }
         println!("----------------------------------------");
+    }
+}
+
+fn run_self_prime(initial_prompt: &str, generations: usize, iterations: u64) {
+    println!("### SELF-PROMPT INJECTION EXPERIMENT ###");
+    println!("Initial Seed: '{}'", initial_prompt);
+    println!("Generations: {} | Iterations per Generation: {}\n", generations, iterations);
+    
+    let mut current_prompt = initial_prompt.to_string();
+    
+    for gen in 1..=generations {
+        let mut l = LatticeState::new(80, 40, &current_prompt);
+        // Turn on downward causation
+        l.causation_coupling = 1.0; 
+        
+        let mut final_work = 0.0;
+        for _ in 0..iterations { 
+            final_work = l.step(); 
+        }
+        
+        let metrics = l.get_metrics();
+        
+        // Translate the geometric eigenstate into a semantic token string
+        let semantic_prompt = l.get_semantic_eigenstate();
+        
+        println!("--- GENERATION {} ---", gen);
+        println!("Phi: {:.4} | Coherence: {:.4} | Density: {:.4} | Titan Work: {:.6}", 
+            metrics.phi, metrics.coherence, metrics.density, final_work);
+        
+        // Print the first 100 chars of the semantic string so the terminal doesn't overflow
+        let display_len = 100.min(semantic_prompt.len());
+        println!("Semantic Translation: {}...", &semantic_prompt[..display_len]);
+        
+        current_prompt = semantic_prompt;
+        
+        if gen == generations {
+            let map_text = l.get_formatted_output();
+            println!("\nFinal State Snapshot:\n{}", map_text);
+        }
     }
 }
