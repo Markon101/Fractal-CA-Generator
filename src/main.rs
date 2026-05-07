@@ -400,6 +400,9 @@ enum Commands {
     DeepTime {
         #[arg(default_value = "Europa Orbital Research Station: Thousand Year Legacy")] prompt: String,
     },
+    ShockTest {
+        #[arg(default_value = "Thermodynamic Resilience")] prompt: String,
+    },
 }
 
 // --- Server Implementation ---
@@ -465,6 +468,7 @@ async fn main() {
         Some(Commands::SelfPrime { prompt, generations, iterations }) => run_self_prime(&prompt, generations, iterations),
         Some(Commands::Prime { instruction, iterations }) => run_prime(&instruction, iterations),
         Some(Commands::DeepTime { prompt }) => run_deep_time(&prompt),
+        Some(Commands::ShockTest { prompt }) => run_shock_test(&prompt),
         None => { run_server(3000).await; }
     }
 }
@@ -698,4 +702,50 @@ fn run_self_prime(initial_prompt: &str, generations: usize, iterations: u64) {
             println!("\nFinal State Snapshot:\n{}", map_text);
         }
     }
+}
+
+fn run_shock_test(prompt: &str) {
+    println!("### THERMODYNAMIC SHOCK EXPERIMENT ###");
+    println!("Seed: '{}'", prompt);
+    
+    let mut l = LatticeState::new(80, 40, prompt);
+    l.causation_coupling = 1.0; 
+    
+    println!("\n[PHASE 1: Reaching Deep Attractor (500 iterations)]");
+    for _ in 0..500 { l.step(); }
+    let m1 = l.get_metrics();
+    println!("Phi: {:.4} | Density: {:.4} | Coherence: {:.4}", m1.phi, m1.density, m1.coherence);
+    let s1 = l.get_semantic_eigenstate();
+    println!("Semantic Translation: {}...", &s1[..100.min(s1.len())]);
+
+    println!("\n[PHASE 2: The Shock Event]");
+    println!("Injecting maximum entropy into the core (20x20 block)...");
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    for y in 10..30 {
+        for x in 30..50 {
+            l.grid[y][x] = Cell {
+                u_re: rng.gen_range(-1.0..1.0), u_im: rng.gen_range(-1.0..1.0),
+                d_re: rng.gen_range(-1.0..1.0), d_im: rng.gen_range(-1.0..1.0),
+                l_re: rng.gen_range(-1.0..1.0), l_im: rng.gen_range(-1.0..1.0),
+                r_re: rng.gen_range(-1.0..1.0), r_im: rng.gen_range(-1.0..1.0),
+            };
+            let prob = l.grid[y][x].prob().sqrt() + 1e-9;
+            l.grid[y][x].u_re /= prob; l.grid[y][x].u_im /= prob;
+            l.grid[y][x].d_re /= prob; l.grid[y][x].d_im /= prob;
+            l.grid[y][x].l_re /= prob; l.grid[y][x].l_im /= prob;
+            l.grid[y][x].r_re /= prob; l.grid[y][x].r_im /= prob;
+        }
+    }
+    let m2 = l.get_metrics();
+    println!("Phi: {:.4} | Density: {:.4} | Coherence: {:.4}", m2.phi, m2.density, m2.coherence);
+    let s2 = l.get_semantic_eigenstate();
+    println!("Semantic Translation: {}...", &s2[..100.min(s2.len())]);
+
+    println!("\n[PHASE 3: Recovery (500 iterations)]");
+    for _ in 0..500 { l.step(); }
+    let m3 = l.get_metrics();
+    println!("Phi: {:.4} | Density: {:.4} | Coherence: {:.4}", m3.phi, m3.density, m3.coherence);
+    let s3 = l.get_semantic_eigenstate();
+    println!("Semantic Translation: {}...", &s3[..100.min(s3.len())]);
 }
