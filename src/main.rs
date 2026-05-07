@@ -403,6 +403,9 @@ enum Commands {
     ShockTest {
         #[arg(default_value = "Thermodynamic Resilience")] prompt: String,
     },
+    PerturbTest {
+        #[arg(default_value = "Breathing Chaos")] prompt: String,
+    },
 }
 
 // --- Server Implementation ---
@@ -469,6 +472,7 @@ async fn main() {
         Some(Commands::Prime { instruction, iterations }) => run_prime(&instruction, iterations),
         Some(Commands::DeepTime { prompt }) => run_deep_time(&prompt),
         Some(Commands::ShockTest { prompt }) => run_shock_test(&prompt),
+        Some(Commands::PerturbTest { prompt }) => run_perturb_test(&prompt),
         None => { run_server(3000).await; }
     }
 }
@@ -748,4 +752,45 @@ fn run_shock_test(prompt: &str) {
     println!("Phi: {:.4} | Density: {:.4} | Coherence: {:.4}", m3.phi, m3.density, m3.coherence);
     let s3 = l.get_semantic_eigenstate();
     println!("Semantic Translation: {}...", &s3[..100.min(s3.len())]);
+}
+
+fn run_perturb_test(prompt: &str) {
+    println!("### CONTINUOUS PERTURBATION EXPERIMENT ###");
+    println!("Seed: '{}'", prompt);
+    println!("Goal: Inject gentle entropy (5% perturbation) every 50 iterations for 20 epochs (1000 total).");
+    
+    let mut l = LatticeState::new(80, 40, prompt);
+    l.causation_coupling = 1.0; 
+    
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+
+    for epoch in 1..=20 {
+        // Run unperturbed for 50 iterations
+        for _ in 0..50 { l.step(); }
+        
+        let metrics = l.get_metrics();
+        let semantics = l.get_semantic_eigenstate();
+        
+        println!("\n--- Epoch {} (Iteration {}) ---", epoch, epoch * 50);
+        println!("Phi: {:.4} | Density: {:.4} | Coherence: {:.4}", metrics.phi, metrics.density, metrics.coherence);
+        println!("Semantic Translation: {}...", &semantics[..100.min(semantics.len())]);
+        
+        // Apply gentle perturbation: Randomly shift 5% of cells
+        let perturb_count = (80 * 40) / 20; // 5%
+        for _ in 0..perturb_count {
+            let x = rng.gen_range(0..80);
+            let y = rng.gen_range(0..40);
+            // Add slight phase noise
+            let phase_noise: f32 = rng.gen_range(-0.5..0.5);
+            let (cos_n, sin_n) = (phase_noise.cos(), phase_noise.sin());
+            let c = &mut l.grid[y][x];
+            
+            let rotate = |re: f32, im: f32| (re * cos_n - im * sin_n, re * sin_n + im * cos_n);
+            (c.u_re, c.u_im) = rotate(c.u_re, c.u_im);
+            (c.d_re, c.d_im) = rotate(c.d_re, c.d_im);
+            (c.l_re, c.l_im) = rotate(c.l_re, c.l_im);
+            (c.r_re, c.r_im) = rotate(c.r_re, c.r_im);
+        }
+    }
 }
