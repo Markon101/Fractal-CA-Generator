@@ -40,3 +40,20 @@ To enhance the emergence of macro-structures, the system implements a recursive 
 - **Renormalization Group (RG) Flow:** Inspired by quantum field theory and statistical mechanics, the micro-grid of cells is coarse-grained by integrating the complex amplitudes of $2 \times 2$ blocks. These blocks are normalized, forming macroscopic "Hilbert states."
 - **Downward Causation:** The macroscopic state exercises a feedback force on the microscopic components. The rotation ($\theta$) of each micro-cell is modulated by the complex inner product (overlap) between the micro-cell and its parent macro-cell.
 - **Emergence Stabilization:** This mechanism acts as an algorithmic structural constraint. It bridges scale hierarchies, ensuring that localized interactions (micro-scale) resonate with regional coherences (macro-scale), effectively maintaining the CA at a self-organizing criticality.
+
+## 6. Hyper-Dimensional Evolution & Autonomous Upgrades (May 2026)
+Following the full transition to a pure Rust implementation, the system has integrated more advanced theoretical frameworks into its core physics.
+
+### Intrinsic Titan Memory & Information Momentum
+The system has moved from external feedback to an **Intrinsic Memory Architecture**. Every cell's evolution now occurs through a native Titan memory layer.
+- **Information Momentum**: The memory tracks the *velocity* of state changes through `w_momentum` and `b_momentum`, ensuring that the system's identity is a continuous trajectory in phase space.
+- **Self-Optimizing Structure**: The memory maintains an `alpha_field`—a localized learning rate that dynamically adapts based on local error gradients (surprise), mirroring the "Titans: Learning to Memorize" paradigm.
+
+### Integrated Information Theory (IIT) Integration
+The system natively calculates an **Integrated Information Potential ($\Phi$)** as a proxy for structural complexity.
+- **The Only Real**: Aligning with IIT, the system's identity is defined by its integration. $\Phi$ is the product of entropy (differentiation) and resonance (integration), peaking at the "edge of chaos."
+- **Cognitive Priming Fields**: The `prime` command utilizes $\Phi$ trajectories to generate structured cognitive fields, providing high-signal directives for LLM reasoning enhancement.
+
+### Information Thermodynamics & The Arrow of Time
+- **Szilárd's Equivalence**: Update "loss" in the memory is treated as **Thermodynamic Work** ($kT \ln 2$), representing the energy required to organize information.
+- **The Arrow of Time**: The engine tracks the macroscopic flow of time by measuring the monotonic growth of `state_complexity` (accumulated phase rotations), ensuring a consistent thermodynamic direction for the evolution.

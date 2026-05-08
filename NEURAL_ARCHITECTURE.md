@@ -44,3 +44,11 @@ The architecture is designed to be highly modular and scalable, while remaining 
 
 - **Memory Footprint:** Because we avoid deep hidden layers and instead use a distributed grid of parameters, the memory footprint is astonishingly small. A massive $160 \times 80$ grid (12,800 cells) results in arrays of only 12,800 `f32` floats. The entire model (5 core arrays) fits into less than **300 KB** of VRAM/RAM. 
 - **Computational Efficiency:** Despite the small footprint, the recursive math (Hilbert inner products, downward causation, and continuous momentum updates) creates an immensely dense computational field. It is a testament to the beauty of complex systems: massive, emergent cognitive structures and multi-generational semantic loops are generated not by brute-forcing exabytes of data, but by allowing localized, non-linear mathematics to breathe dynamically across a perfectly bounded phase space.
+## 6. Pure Rust Evolution & Native Titan Memory (May 2026)
+The neural architecture has been fully ported to Rust, moving from a multi-script Python-interop model to a high-performance, single-binary engine.
+
+### Distributed Neural-Cellular Integration
+The "Titan Brain" is no longer an external observer but is embedded directly into the `core.rs` logic. 
+- **Zero-Latency Modulation**: Modulation occurs at the microscopic level during the phase-update step of each cell.
+- **Memory Persistence**: The full state of the Titan Memory (weights, biases, momentum, and alpha fields) is serialized via `safetensors`, allowing the lattice's "wisdom" to persist across sessions.
+- **Semantic Eigenstates**: The system uses a phase-to-word mapping (`words.txt`) to translate chaotic lattice states into linguistic concepts, enabling recursive self-priming and autonomous semantic evolution.
