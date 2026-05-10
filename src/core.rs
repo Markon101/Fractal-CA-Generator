@@ -3,31 +3,51 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub struct Cell {
-    pub u_re: f32, pub u_im: f32,
-    pub d_re: f32, pub d_im: f32,
-    pub l_re: f32, pub l_im: f32,
-    pub r_re: f32, pub r_im: f32,
+    pub u_re: f32,
+    pub u_im: f32,
+    pub d_re: f32,
+    pub d_im: f32,
+    pub l_re: f32,
+    pub l_im: f32,
+    pub r_re: f32,
+    pub r_im: f32,
     pub source_idx: i32, // Provenance: Index of the original prompt byte
+}
+
+impl Default for Cell {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Cell {
     pub fn new() -> Self {
         Cell {
-            u_re: 0.0, u_im: 0.0,
-            d_re: 0.0, d_im: 0.0,
-            l_re: 0.0, l_im: 0.0,
-            r_re: 0.0, r_im: 0.0,
+            u_re: 0.0,
+            u_im: 0.0,
+            d_re: 0.0,
+            d_im: 0.0,
+            l_re: 0.0,
+            l_im: 0.0,
+            r_re: 0.0,
+            r_im: 0.0,
             source_idx: -1,
         }
     }
     pub fn prob(&self) -> f32 {
-        self.u_re.powi(2) + self.u_im.powi(2) + self.d_re.powi(2) + self.d_im.powi(2) +
-        self.l_re.powi(2) + self.l_im.powi(2) + self.r_re.powi(2) + self.r_im.powi(2)
+        self.u_re.powi(2)
+            + self.u_im.powi(2)
+            + self.d_re.powi(2)
+            + self.d_im.powi(2)
+            + self.l_re.powi(2)
+            + self.l_im.powi(2)
+            + self.r_re.powi(2)
+            + self.r_im.powi(2)
     }
 }
 
-use safetensors::tensor::{Dtype, TensorView, SafeTensors};
 use safetensors::serialize_to_file;
+use safetensors::tensor::{Dtype, SafeTensors, TensorView};
 use std::collections::HashMap;
 
 // Hyper-dimensional, self-optimizing memory structure with Information Momentum
@@ -35,11 +55,11 @@ use std::collections::HashMap;
 pub struct TitanMemory {
     pub w: Array1<f32>,
     pub b: Array1<f32>,
-    pub w_momentum: Array1<f32>,   // Information Momentum: Identity across time
+    pub w_momentum: Array1<f32>, // Information Momentum: Identity across time
     pub b_momentum: Array1<f32>,
-    pub alpha_field: Array1<f32>,  // Localized, self-optimizing learning rates
+    pub alpha_field: Array1<f32>, // Localized, self-optimizing learning rates
     pub base_lr: f32,
-    pub momentum_beta: f32,        // Decay for the momentum vector
+    pub momentum_beta: f32, // Decay for the momentum vector
 }
 
 impl TitanMemory {
@@ -51,9 +71,14 @@ impl TitanMemory {
         let w_momentum = Array1::zeros(size);
         let b_momentum = Array1::zeros(size);
         let alpha_field = Array1::from_elem(size, 1.0); // Start at 1.0 multiplier
-        TitanMemory { 
-            w, b, w_momentum, b_momentum, alpha_field, base_lr,
-            momentum_beta: 0.9 
+        TitanMemory {
+            w,
+            b,
+            w_momentum,
+            b_momentum,
+            alpha_field,
+            base_lr,
+            momentum_beta: 0.9,
         }
     }
 
@@ -65,22 +90,45 @@ impl TitanMemory {
         let alpha_bytes: &[u8] = bytemuck::cast_slice(self.alpha_field.as_slice().unwrap());
 
         let mut data = HashMap::new();
-        data.insert("w".to_string(), TensorView::new(Dtype::F32, vec![self.w.len()], w_bytes).unwrap());
-        data.insert("b".to_string(), TensorView::new(Dtype::F32, vec![self.b.len()], b_bytes).unwrap());
-        data.insert("w_momentum".to_string(), TensorView::new(Dtype::F32, vec![self.w_momentum.len()], w_mom_bytes).unwrap());
-        data.insert("b_momentum".to_string(), TensorView::new(Dtype::F32, vec![self.b_momentum.len()], b_mom_bytes).unwrap());
-        data.insert("alpha_field".to_string(), TensorView::new(Dtype::F32, vec![self.alpha_field.len()], alpha_bytes).unwrap());
+        data.insert(
+            "w".to_string(),
+            TensorView::new(Dtype::F32, vec![self.w.len()], w_bytes).unwrap(),
+        );
+        data.insert(
+            "b".to_string(),
+            TensorView::new(Dtype::F32, vec![self.b.len()], b_bytes).unwrap(),
+        );
+        data.insert(
+            "w_momentum".to_string(),
+            TensorView::new(Dtype::F32, vec![self.w_momentum.len()], w_mom_bytes).unwrap(),
+        );
+        data.insert(
+            "b_momentum".to_string(),
+            TensorView::new(Dtype::F32, vec![self.b_momentum.len()], b_mom_bytes).unwrap(),
+        );
+        data.insert(
+            "alpha_field".to_string(),
+            TensorView::new(Dtype::F32, vec![self.alpha_field.len()], alpha_bytes).unwrap(),
+        );
 
-        serialize_to_file(&data, None::<HashMap<String, String>>, std::path::Path::new(path)).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        serialize_to_file(
+            &data,
+            None::<HashMap<String, String>>,
+            std::path::Path::new(path),
+        )
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
         Ok(())
     }
 
     pub fn load(path: &str, base_lr: f32) -> std::io::Result<Self> {
         let buffer = std::fs::read(path)?;
-        let tensors = SafeTensors::deserialize(&buffer).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        let tensors =
+            SafeTensors::deserialize(&buffer).map_err(|e| std::io::Error::other(e.to_string()))?;
 
         let get_arr = |name: &str| -> std::io::Result<Array1<f32>> {
-            let tensor = tensors.tensor(name).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+            let tensor = tensors
+                .tensor(name)
+                .map_err(|e| std::io::Error::other(e.to_string()))?;
             let slice: &[f32] = bytemuck::cast_slice(tensor.data());
             Ok(Array1::from_vec(slice.to_vec()))
         };
@@ -108,10 +156,14 @@ impl TitanMemory {
     }
 
     // Returns (thermodynamic_work, modulation field)
-    pub fn update_and_modulate(&mut self, x: &Array1<f32>, target: &Array1<f32>) -> (f32, Array1<f32>) {
+    pub fn update_and_modulate(
+        &mut self,
+        x: &Array1<f32>,
+        target: &Array1<f32>,
+    ) -> (f32, Array1<f32>) {
         let pred = self.forward(x);
         let error = &pred - target;
-        
+
         // 1. Self-Optimizing Memory Structure:
         // Adjust the localized learning rate based on error magnitude.
         for i in 0..self.alpha_field.len() {
@@ -122,24 +174,89 @@ impl TitanMemory {
                 self.alpha_field[i] = (self.alpha_field[i] * 0.99).max(0.1);
             }
         }
-        
+
         // 2. Information Momentum: Identity as a trajectory
         // The momentum vector accumulates the direction of updates.
         let effective_lr = &self.alpha_field * self.base_lr;
-        
+
         let w_grad = x * &error;
         let b_grad = &error;
 
-        self.w_momentum = &self.w_momentum * self.momentum_beta + (1.0 - self.momentum_beta) * w_grad;
-        self.b_momentum = &self.b_momentum * self.momentum_beta + (1.0 - self.momentum_beta) * b_grad;
+        self.w_momentum =
+            &self.w_momentum * self.momentum_beta + (1.0 - self.momentum_beta) * w_grad;
+        self.b_momentum =
+            &self.b_momentum * self.momentum_beta + (1.0 - self.momentum_beta) * b_grad;
 
         // Apply gradient update via momentum
         self.w -= &(&self.w_momentum * &effective_lr);
         self.b -= &(&self.b_momentum * &effective_lr);
-        
+
         // Szilárd's Equivalence: The thermodynamic work of the information update
         let work = error.mapv(|v| v.abs()).mean().unwrap_or(0.0);
-        
+
         (work, pred)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ndarray::Array1;
+
+    #[test]
+    fn test_cell_new_and_prob() {
+        let mut cell = Cell::new();
+        assert_eq!(cell.prob(), 0.0);
+
+        cell.u_re = 1.0;
+        assert_eq!(cell.prob(), 1.0);
+
+        cell.d_im = 1.0;
+        assert_eq!(cell.prob(), 2.0);
+    }
+
+    #[test]
+    fn test_titan_memory_initialization() {
+        let tm = TitanMemory::new(10, 0.01);
+        assert_eq!(tm.w.len(), 10);
+        assert_eq!(tm.b.len(), 10);
+        assert_eq!(tm.w_momentum.len(), 10);
+        assert_eq!(tm.b_momentum.len(), 10);
+        assert_eq!(tm.alpha_field.len(), 10);
+        assert_eq!(tm.alpha_field[0], 1.0);
+        assert_eq!(tm.base_lr, 0.01);
+    }
+
+    #[test]
+    fn test_titan_memory_forward() {
+        let tm = TitanMemory::new(10, 0.01);
+        let x = Array1::zeros(10);
+        let out = tm.forward(&x);
+        assert_eq!(out.len(), 10);
+        // Tanh of bias around 0 will be close to 0
+        assert!(out[0].abs() < 0.2);
+    }
+
+    #[test]
+    fn test_titan_memory_update_and_modulate() {
+        let mut tm = TitanMemory::new(10, 0.1);
+        let x = Array1::from_elem(10, 1.0);
+        let target = Array1::from_elem(10, 0.5);
+
+        let _initial_alpha = tm.alpha_field[0];
+
+        let (work, pred) = tm.update_and_modulate(&x, &target);
+
+        assert!(work >= 0.0);
+        assert_eq!(pred.len(), 10);
+
+        // After an update where error > 0.1, alpha_field should increase
+        // Note: the initialization of bias is random between -0.1 and 0.1.
+        // pred = tanh(1.0 * w + b). target is 0.5. So error could be large.
+        // Let's just check that momentum is no longer zero
+        let sum_w_mom: f32 = tm.w_momentum.iter().map(|v| v.abs()).sum();
+        let sum_b_mom: f32 = tm.b_momentum.iter().map(|v| v.abs()).sum();
+        assert!(sum_w_mom > 0.0);
+        assert!(sum_b_mom > 0.0);
     }
 }

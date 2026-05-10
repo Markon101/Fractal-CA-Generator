@@ -38,3 +38,9 @@ The standalone `titan` training command has been removed as training is now a fu
 - **Titans: Learning to Memorize**: Microscopic implementation of weight-updates during inference.
 - **Self-Optimizing Memory**: Dynamic learning rate adaptation based on local entropy.
 - **Information Thermalization**: Optimized pre-thermalization capture windows remain the default for `agent` analysis.
+
+### Non-Local Semantic Entanglement (Quantum-Inspired)
+The engine now supports **Non-Local Phase Synchronization** across the lattice.
+- **Entanglement Coupling**: Cells sharing the same semantic provenance (source token) are coupled via a global phase-field.
+- **Spooky Action at a Distance**: Spatially distant clusters with the same conceptual identity now synchronize their evolution, creating coherent "Reasoning Fields" that transcend local cellular interactions.
+- **Non-Local Coherence Metric**: A new high-signal metric tracks the alignment strength of entangled semantic groups.
