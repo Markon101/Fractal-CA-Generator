@@ -1503,11 +1503,12 @@ fn run_self_prime(
             metrics.phi, metrics.coherence, metrics.density, final_work
         );
 
-        let display_len = 100.min(semantic_prompt.len());
-        println!(
-            "Semantic Translation: {}...",
-            &semantic_prompt[..display_len]
-        );
+        let display_len = semantic_prompt
+            .char_indices()
+            .nth(100)
+            .map(|(i, _)| i)
+            .unwrap_or(semantic_prompt.len());
+        println!("Semantic Translation: {}...", &semantic_prompt[..display_len]);
 
         current_prompt = semantic_prompt;
 
