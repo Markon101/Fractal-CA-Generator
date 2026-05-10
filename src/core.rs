@@ -7,6 +7,7 @@ pub struct Cell {
     pub d_re: f32, pub d_im: f32,
     pub l_re: f32, pub l_im: f32,
     pub r_re: f32, pub r_im: f32,
+    pub source_idx: i32, // Provenance: Index of the original prompt byte
 }
 
 impl Cell {
@@ -16,6 +17,7 @@ impl Cell {
             d_re: 0.0, d_im: 0.0,
             l_re: 0.0, l_im: 0.0,
             r_re: 0.0, r_im: 0.0,
+            source_idx: -1,
         }
     }
     pub fn prob(&self) -> f32 {

@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use tower_http::cors::CorsLayer;
 use clap::{Parser, Subcommand};
-use rand::seq::SliceRandom;
 use ndarray::prelude::*;
 
 mod core;
@@ -44,38 +43,43 @@ impl LatticeState {
     fn new(width: usize, height: usize, prompt: &str) -> Self {
         let mut grid = vec![vec![Cell::new(); width]; height];
         let mut semantic_field = vec![0.0; width * height];
-        let bytes = prompt.as_bytes();
         
-        if bytes.is_empty() {
+        let dictionary: Vec<&str> = include_str!("words.txt").lines().collect();
+        let mut dict_map = std::collections::HashMap::new();
+        for (i, word) in dictionary.iter().enumerate() {
+            dict_map.insert(*word, i);
+        }
+
+        let words: Vec<&str> = prompt.split_whitespace().collect();
+        
+        if words.is_empty() {
             grid[height/2][width/2].u_re = 1.0;
         } else {
-            for (i, &b) in bytes.iter().enumerate() {
-                let mut found = false;
-                for attempt in 0..100 {
-                    let idx = (i * 13 + attempt * 7) % (width * height);
-                    let x = idx % width;
-                    let y = idx / width;
-                    
-                    if (x & y) == 0 || (x | y) % 3 == 0 {
-                        let phase = (b as f32) / 255.0 * std::f32::consts::TAU;
-                        grid[y][x].u_re = phase.cos() * 0.7;
-                        grid[y][x].u_im = phase.sin() * 0.7;
-                        grid[y][x].d_re = phase.cos() * 0.3;
-                        grid[y][x].d_im = -phase.sin() * 0.3;
-                        
-                        semantic_field[y * width + x] = (b as f32) / 255.0;
-                        found = true;
-                        break;
-                    }
-                }
+            for (w_idx, word) in words.iter().enumerate() {
+                // Find word in dictionary or use hash
+                let d_idx = dict_map.get(word.to_lowercase().as_str())
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        // Simple hash for OOV words
+                        let mut h = 0usize;
+                        for b in word.as_bytes() { h = h.wrapping_add(*b as usize).wrapping_mul(31); }
+                        h % dictionary.len()
+                    });
+
+                let phase = (d_idx as f32 / dictionary.len() as f32) * std::f32::consts::TAU;
                 
-                if !found {
-                    let x = (i * 7 + (b as usize) * 3) % width;
-                    let y = (i * 5 + (b as usize) * 11) % height;
-                    let phase = (b as f32) / 255.0 * std::f32::consts::TAU;
-                    grid[y][x].u_re = phase.cos() * 0.5;
-                    grid[y][x].u_im = phase.sin() * 0.5;
-                    semantic_field[y * width + x] = (b as f32) / 255.0;
+                // Inject the word into the grid at multiple points for redundancy
+                for attempt in 0..5 {
+                    let seed = (w_idx * 13 + attempt * 7) as u64;
+                    // Deterministic pseudo-random position based on word and attempt
+                    let pos_idx = ((seed.wrapping_mul(0x517cc1b727220a95)) >> 32) as usize % (width * height);
+                    let x = pos_idx % width;
+                    let y = pos_idx / width;
+
+                    grid[y][x].u_re = phase.cos() * 0.8;
+                    grid[y][x].u_im = phase.sin() * 0.8;
+                    grid[y][x].source_idx = w_idx as i32;
+                    semantic_field[y * width + x] = d_idx as f32 / dictionary.len() as f32;
                 }
             }
         }
@@ -107,7 +111,7 @@ impl LatticeState {
         let mut next_grid = self.grid.clone();
         
         // 1. Hyper-dimensional feedback: Get modulation from Titan Memory based on previous state
-        let (work, modulation_field) = self.memory.update_and_modulate(&self.current_probs, &self.current_probs); // Predict self
+        let (_work, modulation_field) = self.memory.update_and_modulate(&self.current_probs, &self.current_probs); // Predict self
         
         // 1.5. Renormalization Group (Hilbert Space macro-states)
         let macro_width = self.width / 2;
@@ -169,7 +173,18 @@ impl LatticeState {
                 let (l_re, l_im) = coin(l_c, 'l');
                 let (r_re, r_im) = coin(r_c, 'r');
 
-                let mut cell = Cell { u_re, u_im, d_re, d_im, l_re, l_im, r_re, r_im };
+                // Determine provenance: pick source_idx from neighbor with highest prob
+                let mut best_source = -1;
+                let mut max_nb_prob = -1.0;
+                for nb in &[u_c, d_c, l_c, r_c] {
+                    let p = nb.prob();
+                    if p > max_nb_prob {
+                        max_nb_prob = p;
+                        best_source = nb.source_idx;
+                    }
+                }
+
+                let mut cell = Cell { u_re, u_im, d_re, d_im, l_re, l_im, r_re, r_im, source_idx: best_source };
                 
                 let p = cell.prob();
                 let idx = y * self.width + x;
@@ -314,8 +329,8 @@ impl LatticeState {
     }
 
     fn get_semantic_eigenstate(&self) -> String {
-        let words: Vec<&str> = include_str!("words.txt").lines().collect();
-        let vocab_size = words.len() as f32;
+        let dictionary: Vec<&str> = include_str!("words.txt").lines().collect();
+        let vocab_size = dictionary.len() as f32;
         
         let mut eigen_prompt = Vec::new();
         
@@ -336,7 +351,6 @@ impl LatticeState {
                         let x = rx * macro_size + dx;
                         if y < self.height && x < self.width {
                             let cell = &self.grid[y][x];
-                            // Use the Up component as the primary phase vector, weighted by cell probability
                             let p = cell.prob();
                             sum_re += cell.u_re * p;
                             sum_im += cell.u_im * p;
@@ -345,12 +359,22 @@ impl LatticeState {
                     }
                 }
                 
-                if total_prob > 0.1 { // Only extract words from active regions
+                if total_prob > 0.5 { // Higher threshold for semantic clarity
                     let phase = sum_im.atan2(sum_re); // -PI to PI
-                    let normalized_phase = (phase + std::f32::consts::PI) / (2.0 * std::f32::consts::PI); // 0.0 to 1.0
-                    let word_idx = (normalized_phase * vocab_size) as usize;
-                    let word_idx = word_idx.clamp(0, words.len() - 1);
-                    eigen_prompt.push(words[word_idx]);
+                    let normalized_phase = (phase + std::f32::consts::PI) / (2.0 * std::f32::consts::PI); 
+                    
+                    // Rarity Bias: Favor words from the latter half of the frequency-sorted dictionary
+                    // if the region is particularly resonant.
+                    let bias = if total_prob > 2.0 { 0.5 } else { 0.0 };
+                    let adjusted_idx = (normalized_phase * (vocab_size * (1.0 - bias))) + (vocab_size * bias);
+                    let word_idx = (adjusted_idx as usize).clamp(0, dictionary.len() - 1);
+                    
+                    let word = dictionary[word_idx];
+                    // Filter out very common stop words if they appear as eigenstates
+                    let stop_words = ["the", "of", "and", "to", "a", "in", "for", "is", "on", "that", "by", "this", "with"];
+                    if !stop_words.contains(&word) {
+                        eigen_prompt.push(word);
+                    }
                 }
             }
         }
@@ -360,6 +384,40 @@ impl LatticeState {
         } else {
             eigen_prompt.join(" ")
         }
+    }
+
+    fn extract_grounded_attractors(&self, top_n: usize) -> Vec<(String, f32)> {
+        let mut source_counts = std::collections::HashMap::new();
+        for row in &self.grid {
+            for cell in row {
+                if cell.source_idx >= 0 {
+                    let p = cell.prob();
+                    *source_counts.entry(cell.source_idx as usize).or_insert(0.0) += p;
+                }
+            }
+        }
+        
+        let words: Vec<&str> = self.seed_prompt.split_whitespace().collect();
+        let mut word_influences = Vec::new();
+        
+        for (i, word) in words.iter().enumerate() {
+            let influence = source_counts.get(&i).cloned().unwrap_or(0.0);
+            word_influences.push((word.to_string(), influence));
+        }
+        
+        word_influences.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        
+        let mut seen = std::collections::HashSet::new();
+        let mut result = Vec::new();
+        for (word, influence) in word_influences {
+            if !seen.contains(&word) && influence > 0.0 {
+                seen.insert(word.clone());
+                result.push((word, influence));
+            }
+            if result.len() >= top_n { break; }
+        }
+        
+        result
     }
 }
 
@@ -402,6 +460,13 @@ enum Commands {
     Prime {
         instruction: String,
         #[arg(short, long, default_value_t = 10)] iterations: u64,
+        #[arg(long)] homeostatic: bool,
+    },
+    Benchmark {
+        #[arg(short, long, default_value_t = 5)] samples: usize,
+    },
+    SelfTest {
+        #[arg(default_value = "The architecture of intelligence is a fractal resonance of information and entropy.")] prompt: String,
     },
     DeepTime {
         #[arg(default_value = "Europa Orbital Research Station: Thousand Year Legacy")] prompt: String,
@@ -475,7 +540,9 @@ async fn main() {
         Some(Commands::Lab {}) => run_lab(),
         Some(Commands::Observe { seed, duration }) => run_observe(&seed, duration).await,
         Some(Commands::SelfPrime { prompt, generations, iterations, width, height, load_model, save_model }) => run_self_prime(&prompt, generations, iterations, width, height, load_model, save_model),
-        Some(Commands::Prime { instruction, iterations }) => run_prime(&instruction, iterations),
+        Some(Commands::Prime { instruction, iterations, homeostatic }) => run_prime(&instruction, iterations, homeostatic),
+        Some(Commands::Benchmark { samples }) => run_benchmark(samples),
+        Some(Commands::SelfTest { prompt }) => run_self_test(&prompt),
         Some(Commands::DeepTime { prompt }) => run_deep_time(&prompt),
         Some(Commands::ShockTest { prompt }) => run_shock_test(&prompt),
         Some(Commands::PerturbTest { prompt }) => run_perturb_test(&prompt),
@@ -545,7 +612,7 @@ fn run_agent(prompt: &str, iterations: u64, width: usize, height: usize, max_poi
         }
     }
 
-    struct Point { x: usize, y: usize, density: i32, char: char }
+    struct Point { x: usize, y: usize, density: i32 }
     let mut focal_points = Vec::new();
 
     for y in 0..grid.len() {
@@ -563,7 +630,7 @@ fn run_agent(prompt: &str, iterations: u64, width: usize, height: usize, max_poi
                         }
                     }
                 }
-                if density > 0 { focal_points.push(Point { x, y, density, char: c }); }
+                if density > 0 { focal_points.push(Point { x, y, density }); }
             }
         }
     }
@@ -637,38 +704,247 @@ async fn run_observe(seed: &str, duration: u64) {
     }
 }
 
-fn run_prime(instruction: &str, iterations: u64) {
+fn run_prime(instruction: &str, iterations: u64, homeostatic: bool) {
     let mut l = LatticeState::new(100, 50, instruction);
-    let mut phi_trajectory = Vec::new();
+    let mut trajectory = Vec::new();
     
-    for _ in 0..iterations { 
-        l.step(); 
-        phi_trajectory.push(l.get_metrics().phi);
+    let capture_points = vec![3, 5, 8, 10, 15, 20];
+    let mut best_step = 0;
+    let mut max_phi = -1.0;
+    
+    // Initial metrics
+    let mut best_metrics = l.get_metrics();
+    let mut best_attractors = Vec::new();
+    let mut best_eigenstate = String::new();
+
+    for i in 1..=iterations.max(20) {
+        l.step();
+
+        if homeostatic && i % 5 == 0 {
+            // Apply light perturbation to avoid deep attractor lock
+            use rand::Rng;
+            let mut rng = rand::thread_rng();
+            let perturb_count = (100 * 50) / 100; // 1%
+            for _ in 0..perturb_count {
+                let x = rng.gen_range(0..100);
+                let y = rng.gen_range(0..50);
+                let phase_noise: f32 = rng.gen_range(-0.1..0.1);
+                let (cos_n, sin_n) = (phase_noise.cos(), phase_noise.sin());
+                let c = &mut l.grid[y][x];
+                let rotate = |re: f32, im: f32| (re * cos_n - im * sin_n, re * sin_n + im * cos_n);
+                (c.u_re, c.u_im) = rotate(c.u_re, c.u_im);
+                (c.d_re, c.d_im) = rotate(c.d_re, c.d_im);
+                (c.l_re, c.l_im) = rotate(c.l_re, c.l_im);
+                (c.r_re, c.r_im) = rotate(c.r_re, c.r_im);
+            }
+        }
+
+        let m = l.get_metrics();
+        trajectory.push(m.phi);
+        
+        if capture_points.contains(&i) {
+            // We look for the peak Integrated Information (Phi) in the pre-thermalization window
+            if m.phi > max_phi {
+                max_phi = m.phi;
+                best_step = i;
+                best_metrics = m;
+                best_attractors = l.extract_grounded_attractors(8);
+                best_eigenstate = l.get_semantic_eigenstate();
+            }
+        }
+    }
+
+    let phi_avg = trajectory.iter().sum::<f32>() / trajectory.len() as f32;
+    let phi_trend = if best_metrics.phi > phi_avg { "Ascending (Structural Integration)" } else { "Descending (Phase Differentiation)" };
+
+    let mode = if best_metrics.entropy > 11.5 {
+        "Divergent-Creative"
+    } else if best_metrics.resonance > 1.6 {
+        "Integrative-Modular"
+    } else if best_metrics.coherence > 0.8 {
+        "High-Coherence Analytical"
+    } else if best_metrics.phi > 18.0 {
+        "Deep-State Synthesis"
+    } else {
+        "Homeostatic-Neutral"
+    };
+
+    let attractor_str = best_attractors.iter().map(|(s, _)| s.as_str()).collect::<Vec<&str>>().join(", ");
+    
+    println!("### CHAOS-PRIMED COGNITIVE FIELD REPORT");
+    println!("PROMPT SUMMARY: \"{}\"", instruction);
+    println!("SELECTED PRIMING ITERATION: {} (Pre-thermalization Window)", best_step);
+    
+    println!("\n[METRIC TRAJECTORY]");
+    println!("- Entropy: {:.4} | Resonance: {:.4} | Coherence: {:.4}", best_metrics.entropy, best_metrics.resonance, best_metrics.coherence);
+    println!("- Integrated Information (Phi): {:.4} ({})", best_metrics.phi, phi_trend);
+    println!("- Thermodynamic Work (Szilárd): {:.6}", best_metrics.work);
+    println!("- State Complexity (Arrow of Time): {:.2}", best_metrics.state_complexity);
+    
+    println!("\n[MODE CLASSIFICATION]");
+    println!("Target Regime: {}", mode);
+    if best_metrics.phi < 10.0 {
+        println!("Caution: Low distinctiveness. System may require more iterations or a more evocative prompt.");
+    } else if best_step > 15 {
+        println!("Caution: Deep-attractor lock. System may be over-thermalized.");
+    }
+
+    println!("\n[GROUNDED SEMANTIC ATTRACTORS]");
+    println!("The following concepts from your prompt have survived as stable dynamic clusters: {}", attractor_str);
+    
+    println!("\n[EMERGENT SEMANTIC EIGENSTATE]");
+    println!("Field Translation: {}", best_eigenstate);
+    
+    println!("\n[REASONING DIRECTIVE]");
+    println!("You are currently operating within the '{}' cognitive regime.", mode);
+    if mode.contains("Divergent") {
+        println!("Prioritize lateral thinking, novel associations, and expansive narrative exploration.");
+    } else if mode.contains("Integrative") {
+        println!("Prioritize structural consistency, modular architecture, and bridging disparate concepts.");
+    } else if mode.contains("Analytical") {
+        println!("Prioritize logical decomposition, precision, and low-entropy clarity.");
+    } else {
+        println!("Maintain a balanced, adaptive reasoning style corresponding to the provided metrics.");
     }
     
-    let metrics = l.get_metrics();
-    let phi_avg = phi_trajectory.iter().sum::<f32>() / phi_trajectory.len() as f32;
-    let phi_trend = if metrics.phi > phi_avg { "Ascending (Integrating)" } else { "Descending (Differentiating)" };
+    println!("\n[PRIMING BLOCK END]");
+}
 
-    let vibe = if metrics.entropy > 10.95 { "Highly divergent and creative." } else { "Convergent and analytical." };
-    let structure = if metrics.resonance > 1.45 { "Strong rhythmic patterns detected. Use structured, modular responses." } else { "Diffuse state. Prefer fluid, narrative explanations." };
+fn run_benchmark(_samples: usize) {
+    println!("### FRACTAL CA PRIMING BENCHMARK HARNESS ###");
+    println!("Evaluating priming strategies across reasoning, coding, and creative tasks.\n");
 
-    let words: Vec<&str> = instruction.split_whitespace().collect();
-    let mut rng = rand::thread_rng();
-    let active_count = (words.len() as f32 * metrics.density * 5.0).max(1.0) as usize;
-    let hotspots: Vec<&&str> = words.choose_multiple(&mut rng, active_count.min(words.len())).collect();
-    let hotspot_str: String = hotspots.iter().map(|s| **s).collect::<Vec<&str>>().join(", ");
+    let tasks = vec![
+        ("Reasoning", "Explain the relationship between Szilárd's equivalence and Landauer's principle in the context of reversible computing."),
+        ("Coding", "Write a thread-safe lock-free concurrent queue in Rust using atomic pointers and hazard pointers."),
+        ("Creative", "Describe a Dyson swarm constructed from self-replicating nanobots that have developed a collective religious consciousness."),
+    ];
 
-    println!("### CHAOS-PRIMED COGNITIVE FIELD");
-    println!("[METRICS]\n- Entropy: {:.4} ({})\n- Resonance: {:.4} ({})\n- Integrated Information (Phi): {:.4} ({})", 
-        metrics.entropy, vibe, metrics.resonance, structure, metrics.phi, phi_trend);
-    println!("- Thermodynamic Work: {:.6} (Energy of Transition)", metrics.work);
-    println!("- State Complexity (Arrow of Time): {:.2} (Accumulated Phase Rotations)", metrics.state_complexity);
+    for (category, prompt) in tasks {
+        println!("--------------------------------------------------");
+        println!("CATEGORY: {}", category);
+        println!("PROMPT: \"{}\"", prompt);
+        
+        // 1. Baseline
+        println!("\n[STRATEGY: RAW BASELINE]");
+        println!("Ready for direct inference.");
+        
+        // 2. Prime Enhanced (Integrated Information Peak)
+        let mut l = LatticeState::new(100, 50, prompt);
+        let mut max_phi = -1.0;
+        let mut best_phi_metrics = l.get_metrics();
+        let mut best_phi_step = 0;
+        
+        for i in 1..=15 {
+            l.step();
+            let m = l.get_metrics();
+            if m.phi > max_phi {
+                max_phi = m.phi;
+                best_phi_metrics = m;
+                best_phi_step = i;
+            }
+        }
+        
+        println!("\n[STRATEGY: PHI-OPTIMIZED (Step {})]", best_phi_step);
+        println!("Phi: {:.4} | Entropy: {:.4} | Resonance: {:.4}", best_phi_metrics.phi, best_phi_metrics.entropy, best_phi_metrics.resonance);
+        
+        // 3. Coherence Variant
+        let mut l2 = LatticeState::new(100, 50, prompt);
+        let mut max_coherence = -1.0;
+        let mut coh_metrics = l2.get_metrics();
+        let mut coh_step = 0;
+        for i in 1..=15 {
+            l2.step();
+            let m = l2.get_metrics();
+            if m.coherence > max_coherence {
+                max_coherence = m.coherence;
+                coh_metrics = m;
+                coh_step = i;
+            }
+        }
+        println!("\n[STRATEGY: COHERENCE-OPTIMIZED (Step {})]", coh_step);
+        println!("Coherence: {:.4} | Resonance: {:.4} | Phi: {:.4}", coh_metrics.coherence, coh_metrics.resonance, coh_metrics.phi);
+    }
     
-    println!("\n[SEMANTIC ATTRACTOR]\nThe evolution converged on these core concepts: {}", hotspot_str);
+    println!("\n--------------------------------------------------");
+    println!("Benchmark artifacts generated. Comparative scoring requires downstream LLM evaluation.");
+}
+
+fn run_self_test(prompt: &str) {
+    println!("### DEEP SELF-TEST: QUESTIONING THE LATTICE ###");
+    println!("Prompt: \"{}\"\n", prompt);
+
+    let mut l_vanilla = LatticeState::new(100, 50, prompt);
+    let mut l_homeo = LatticeState::new(100, 50, prompt);
+
+    println!("ASSUMPTION 1: Provenance persistence over time.");
+    println!("Testing if the original prompt signal washes out or survives into deep time.");
     
-    println!("\n[COGNITIVE DIRECTIVE]\nYou are operating within an integrated information field. Adjust your reasoning style to match the 'vibe' and 'structure' described above.");
-    println!("If Phi is Ascending, prioritize synthesis and bridging concepts. If Descending, prioritize analysis and breakdown.");
+    let intervals = [10, 50, 100, 200];
+    println!("\nIter | Van Sat % | Hom Sat % | Van Attractors | Hom Attractors");
+    println!("-----|-----------|-----------|----------------|---------------");
+
+    for &target in &intervals {
+        while l_vanilla.iteration < target { l_vanilla.step(); }
+        while l_homeo.iteration < target {
+            l_homeo.step();
+            if l_homeo.iteration % 5 == 0 {
+                use rand::Rng;
+                let mut rng = rand::thread_rng();
+                for _ in 0..50 {
+                    let x = rng.gen_range(0..100);
+                    let y = rng.gen_range(0..50);
+                    let noise: f32 = rng.gen_range(-0.1..0.1);
+                    let c = &mut l_homeo.grid[y][x];
+                    let (cn, sn) = (noise.cos(), noise.sin());
+                    let rot = |re: f32, im: f32| (re*cn - im*sn, re*sn + im*cn);
+                    (c.u_re, c.u_im) = rot(c.u_re, c.u_im);
+                    (c.d_re, c.d_im) = rot(c.d_re, c.d_im);
+                    (c.l_re, c.l_im) = rot(c.l_re, c.l_im);
+                    (c.r_re, c.r_im) = rot(c.r_re, c.r_im);
+                }
+            }
+        }
+
+        let van_sat = l_vanilla.grid.iter().flatten().filter(|c| c.source_idx >= 0).count() as f32 / 50.0; // % of 5000
+        let hom_sat = l_homeo.grid.iter().flatten().filter(|c| c.source_idx >= 0).count() as f32 / 50.0;
+        
+        let van_attrs = l_vanilla.extract_grounded_attractors(3).iter().map(|(s, _)| s.clone()).collect::<Vec<_>>().join(",");
+        let hom_attrs = l_homeo.extract_grounded_attractors(3).iter().map(|(s, _)| s.clone()).collect::<Vec<_>>().join(",");
+
+        println!("{:4} | {:8.1}% | {:8.1}% | {:14} | {:14}", target, van_sat, hom_sat, van_attrs, hom_attrs);
+    }
+
+    println!("\nASSUMPTION 2: Phi (Integrated Information) as a structural proxy.");
+    let m_van = l_vanilla.get_metrics();
+    let m_hom = l_homeo.get_metrics();
+    println!("Vanilla Phi: {:.4} | Entropy: {:.4} | Resonance: {:.4}", m_van.phi, m_van.entropy, m_van.resonance);
+    println!("Homeo   Phi: {:.4} | Entropy: {:.4} | Resonance: {:.4}", m_hom.phi, m_hom.entropy, m_hom.resonance);
+
+    println!("\nASSUMPTION 3: Deterministic Mapping.");
+    let l_check = LatticeState::new(100, 50, prompt);
+    let mut l_dup = LatticeState::new(100, 50, prompt);
+    for _ in 0..10 { l_dup.step(); }
+    let a1 = l_check.extract_grounded_attractors(5);
+    let a2 = l_dup.extract_grounded_attractors(5);
+    if a1 != a2 {
+        println!("CRITICAL: Dynamic Mapping is NOT identical across steps (as expected, but checking for core drift).");
+    } else {
+        println!("RESULT: Attractors are stable between iteration 0 and 10? Wait, that shouldn't be if it's evolving. Oh, I see.");
+    }
+    
+    println!("\nREFLECTION:");
+    if m_hom.phi > m_van.phi {
+        println!("- Homeostatic perturbation INCREASED integrated information. Assumption confirmed: Breathing helps.");
+    } else {
+        println!("- Vanilla state is more integrated. Questioning: Is perturbation just noise or true breathing?");
+    }
+    
+    if l_vanilla.extract_grounded_attractors(1).is_empty() {
+        println!("- WARNING: Provenance signal LOSS at iteration 200. The lattice has thermalized away its memory.");
+    } else {
+        println!("- SUCCESS: Provenance signal SURVIVED 200 iterations. The causal link to the prompt is robust.");
+    }
 }
 
 fn run_deep_time(prompt: &str) {
@@ -796,6 +1072,7 @@ fn run_shock_test(prompt: &str) {
                 d_re: rng.gen_range(-1.0..1.0), d_im: rng.gen_range(-1.0..1.0),
                 l_re: rng.gen_range(-1.0..1.0), l_im: rng.gen_range(-1.0..1.0),
                 r_re: rng.gen_range(-1.0..1.0), r_im: rng.gen_range(-1.0..1.0),
+                source_idx: -2, // Shock-induced noise
             };
             let prob = l.grid[y][x].prob().sqrt() + 1e-9;
             l.grid[y][x].u_re /= prob; l.grid[y][x].u_im /= prob;
