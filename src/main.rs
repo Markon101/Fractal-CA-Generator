@@ -11,6 +11,7 @@ use ndarray::prelude::*;
 
 mod core;
 use crate::core::{Cell, TitanMemory};
+use tiktoken_rs::cl100k_base;
 
 #[derive(Clone)]
 struct LatticeState {
@@ -25,6 +26,9 @@ struct LatticeState {
     current_probs: Array1<f32>, // Store state for gradient updates
     cumulative_complexity: f32, // The Arrow of Time: Accumulated state rotations
     causation_coupling: f32,    // Multiplier for downward causation recursion phase
+    prev_phi: f32,              // For adaptive perturbation
+    max_phi: f32,               // Peak Phi recorded during this run
+    heartbeat_count: u32,       // Count of adaptive perturbations triggered
 }
 
 #[derive(Serialize, Debug)]
@@ -37,6 +41,7 @@ struct Metrics {
     state_complexity: f32, // The Arrow of Time
     raw_sum: f32,
     coherence: f32, // Hilbert phase coherence
+    heartbeats: u32,
 }
 
 impl LatticeState {
@@ -44,42 +49,38 @@ impl LatticeState {
         let mut grid = vec![vec![Cell::new(); width]; height];
         let mut semantic_field = vec![0.0; width * height];
         
-        let dictionary: Vec<&str> = include_str!("words.txt").lines().collect();
-        let mut dict_map = std::collections::HashMap::new();
-        for (i, word) in dictionary.iter().enumerate() {
-            dict_map.insert(*word, i);
-        }
+        let bpe = cl100k_base().unwrap();
+        let tokens = bpe.encode_with_special_tokens(prompt);
+        let vocab_size = 100277.0; // cl100k_base vocab size
 
-        let words: Vec<&str> = prompt.split_whitespace().collect();
-        
-        if words.is_empty() {
+        if tokens.is_empty() {
             grid[height/2][width/2].u_re = 1.0;
         } else {
-            for (w_idx, word) in words.iter().enumerate() {
-                // Find word in dictionary or use hash
-                let d_idx = dict_map.get(word.to_lowercase().as_str())
-                    .cloned()
-                    .unwrap_or_else(|| {
-                        // Simple hash for OOV words
-                        let mut h = 0usize;
-                        for b in word.as_bytes() { h = h.wrapping_add(*b as usize).wrapping_mul(31); }
-                        h % dictionary.len()
-                    });
-
-                let phase = (d_idx as f32 / dictionary.len() as f32) * std::f32::consts::TAU;
+            let n_tokens = tokens.len();
+            for (t_idx, &token_id) in tokens.iter().enumerate() {
+                let phase = (token_id as f32 / vocab_size) * std::f32::consts::TAU;
                 
-                // Inject the word into the grid at multiple points for redundancy
-                for attempt in 0..5 {
-                    let seed = (w_idx * 13 + attempt * 7) as u64;
-                    // Deterministic pseudo-random position based on word and attempt
-                    let pos_idx = ((seed.wrapping_mul(0x517cc1b727220a95)) >> 32) as usize % (width * height);
-                    let x = pos_idx % width;
-                    let y = pos_idx / width;
+                // SPATIAL SEMANTIC MANIFOLD: 
+                // Map the token sequence to X and its semantic ID locality to Y.
+                // We use bit-interleaving of the token ID to preserve vocabulary proximity.
+                let x_fine = (token_id & 0x3F) as usize; // Lower 6 bits for fine X-drift
+                let y_fine = ((token_id >> 6) & 0x3FF) as usize; // Next 10 bits for Y position
 
-                    grid[y][x].u_re = phase.cos() * 0.8;
-                    grid[y][x].u_im = phase.sin() * 0.8;
-                    grid[y][x].source_idx = w_idx as i32;
-                    semantic_field[y * width + x] = d_idx as f32 / dictionary.len() as f32;
+                let base_x = (t_idx as f32 / n_tokens as f32 * width as f32) as usize;
+                let x = (base_x + x_fine % (width / n_tokens.max(1)).max(1)) % width;
+                let y = y_fine % height;
+                
+                // Inject with a small spatial spread (the "manifold cluster")
+                for dy in -1..=1 {
+                    for dx in -1..=1 {
+                        let nx = (x as i32 + dx).rem_euclid(width as i32) as usize;
+                        let ny = (y as i32 + dy).rem_euclid(height as i32) as usize;
+
+                        grid[ny][nx].u_re = phase.cos() * 0.9;
+                        grid[ny][nx].u_im = phase.sin() * 0.9;
+                        grid[ny][nx].source_idx = t_idx as i32;
+                        semantic_field[ny * width + nx] = token_id as f32 / vocab_size;
+                    }
                 }
             }
         }
@@ -104,6 +105,9 @@ impl LatticeState {
             current_probs: Array1::from_vec(initial_probs),
             cumulative_complexity: 0.0,
             causation_coupling: 1.0,
+            prev_phi: 0.0,
+            max_phi: 0.0,
+            heartbeat_count: 0,
         }
     }
 
@@ -232,6 +236,38 @@ impl LatticeState {
         let (true_work, _) = self.memory.update_and_modulate(&self.current_probs, &new_probs_arr);
         self.current_probs = new_probs_arr;
         
+        // ADAPTIVE HEARTBEAT (Adaptive Perturbation)
+        // Monitor Integrated Information (Phi) and trigger entropy injection if 
+        // the system is stalling or collapsing.
+        let m = self.get_metrics();
+        let current_phi = m.phi;
+        if current_phi > self.max_phi { self.max_phi = current_phi; }
+
+        let phi_diff = (current_phi - self.prev_phi).abs();
+        let is_stagnant = self.iteration > 10 && phi_diff < 0.01;
+        let is_collapsing = current_phi < self.max_phi * 0.4 && current_phi > 0.1;
+
+        if is_stagnant || is_collapsing {
+            self.heartbeat_count += 1;
+            use rand::Rng;
+            let mut rng = rand::thread_rng();
+            // Heartbeat: Inject a ripple of phase noise to break the attractor lock
+            let ripple_count = (self.width * self.height) / 50; // 2% 
+            for _ in 0..ripple_count {
+                let x = rng.gen_range(0..self.width);
+                let y = rng.gen_range(0..self.height);
+                let c = &mut self.grid[y][x];
+                let noise: f32 = rng.gen_range(-0.5..0.5);
+                let (cn, sn) = (noise.cos(), noise.sin());
+                let rot = |re: f32, im: f32| (re*cn - im*sn, re*sn + im*cn);
+                (c.u_re, c.u_im) = rot(c.u_re, c.u_im);
+                (c.d_re, c.d_im) = rot(c.d_re, c.d_im);
+                (c.l_re, c.l_im) = rot(c.l_re, c.l_im);
+                (c.r_re, c.r_im) = rot(c.r_re, c.r_im);
+            }
+        }
+        self.prev_phi = current_phi;
+        
         true_work
     }
 
@@ -244,7 +280,7 @@ impl LatticeState {
         let total_p: f32 = probs.iter().sum();
         
         if total_p == 0.0 {
-            return Metrics { entropy: 0.0, density: 0.0, resonance: 0.0, phi: 0.0, work: 0.0, state_complexity: self.cumulative_complexity, raw_sum: 0.0, coherence: 0.0 };
+            return Metrics { entropy: 0.0, density: 0.0, resonance: 0.0, phi: 0.0, work: 0.0, state_complexity: self.cumulative_complexity, raw_sum: 0.0, coherence: 0.0, heartbeats: self.heartbeat_count };
         }
 
         let entropy = -probs.iter().filter(|&&p| p > 0.0).map(|&p| {
@@ -301,6 +337,7 @@ impl LatticeState {
             state_complexity: self.cumulative_complexity,
             raw_sum: total_p,
             coherence,
+            heartbeats: self.heartbeat_count,
         }
     }
 
@@ -329,12 +366,10 @@ impl LatticeState {
     }
 
     fn get_semantic_eigenstate(&self) -> String {
-        let dictionary: Vec<&str> = include_str!("words.txt").lines().collect();
-        let vocab_size = dictionary.len() as f32;
+        let bpe = cl100k_base().unwrap();
         
-        let mut eigen_prompt = Vec::new();
+        let mut eigen_tokens = Vec::new();
         
-        // Coarse grain the grid into 8x8 macro-regions
         let macro_size = 8;
         let regions_y = self.height / macro_size;
         let regions_x = self.width / macro_size;
@@ -359,30 +394,38 @@ impl LatticeState {
                     }
                 }
                 
-                if total_prob > 0.5 { // Higher threshold for semantic clarity
-                    let phase = sum_im.atan2(sum_re); // -PI to PI
+                if total_prob > 0.5 {
+                    let phase = sum_im.atan2(sum_re); 
                     let normalized_phase = (phase + std::f32::consts::PI) / (2.0 * std::f32::consts::PI); 
                     
-                    // Rarity Bias: Favor words from the latter half of the frequency-sorted dictionary
-                    // if the region is particularly resonant.
-                    let bias = if total_prob > 2.0 { 0.5 } else { 0.0 };
-                    let adjusted_idx = (normalized_phase * (vocab_size * (1.0 - bias))) + (vocab_size * bias);
-                    let word_idx = (adjusted_idx as usize).clamp(0, dictionary.len() - 1);
-                    
-                    let word = dictionary[word_idx];
-                    // Filter out very common stop words if they appear as eigenstates
-                    let stop_words = ["the", "of", "and", "to", "a", "in", "for", "is", "on", "that", "by", "this", "with"];
-                    if !stop_words.contains(&word) {
-                        eigen_prompt.push(word);
-                    }
+                    // Rarity Bias: Push into the higher-ID token space if resonant
+                    let bias = if total_prob > 2.0 { 0.3 } else { 0.0 };
+                    let adjusted_idx = (normalized_phase * (100000.0 * (1.0 - bias))) + (100000.0 * bias);
+                    let token_id = (adjusted_idx as usize).clamp(0, 100000);
+                    eigen_tokens.push(token_id as u32);
                 }
             }
         }
         
-        if eigen_prompt.is_empty() {
+        if eigen_tokens.is_empty() {
             "void".to_string()
         } else {
-            eigen_prompt.join(" ")
+            // Use cl100k_base's decode but handle errors more gracefully
+            match bpe.decode(&eigen_tokens) {
+                Ok(s) => s.replace("\n", " "),
+                Err(_) => {
+                    // Fallback: decode tokens individually to isolate the error
+                    let mut s = String::new();
+                    for t in eigen_tokens {
+                        if let Ok(piece) = bpe.decode(&[t]) {
+                            s.push_str(&piece.replace("\n", " "));
+                        } else {
+                            s.push_str("[?]");
+                        }
+                    }
+                    s
+                }
+            }
         }
     }
 
@@ -397,22 +440,25 @@ impl LatticeState {
             }
         }
         
-        let words: Vec<&str> = self.seed_prompt.split_whitespace().collect();
-        let mut word_influences = Vec::new();
+        let bpe = cl100k_base().unwrap();
+        let tokens = bpe.encode_with_special_tokens(&self.seed_prompt);
+        let mut token_influences = Vec::new();
         
-        for (i, word) in words.iter().enumerate() {
+        for (i, &token_id) in tokens.iter().enumerate() {
             let influence = source_counts.get(&i).cloned().unwrap_or(0.0);
-            word_influences.push((word.to_string(), influence));
+            if let Ok(s) = bpe.decode(&[token_id]) {
+                token_influences.push((s.trim().to_string(), influence));
+            }
         }
         
-        word_influences.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        token_influences.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         
         let mut seen = std::collections::HashSet::new();
         let mut result = Vec::new();
-        for (word, influence) in word_influences {
-            if !seen.contains(&word) && influence > 0.0 {
-                seen.insert(word.clone());
-                result.push((word, influence));
+        for (token_str, influence) in token_influences {
+            if !seen.contains(&token_str) && influence > 0.0 && token_str.len() > 1 {
+                seen.insert(token_str.clone());
+                result.push((token_str, influence));
             }
             if result.len() >= top_n { break; }
         }
@@ -778,6 +824,7 @@ fn run_prime(instruction: &str, iterations: u64, homeostatic: bool) {
     println!("\n[METRIC TRAJECTORY]");
     println!("- Entropy: {:.4} | Resonance: {:.4} | Coherence: {:.4}", best_metrics.entropy, best_metrics.resonance, best_metrics.coherence);
     println!("- Integrated Information (Phi): {:.4} ({})", best_metrics.phi, phi_trend);
+    println!("- Adaptive Heartbeats Triggered: {} (Peak Window) / {} (Total)", best_metrics.heartbeats, l.get_metrics().heartbeats);
     println!("- Thermodynamic Work (Szilárd): {:.6}", best_metrics.work);
     println!("- State Complexity (Arrow of Time): {:.2}", best_metrics.state_complexity);
     

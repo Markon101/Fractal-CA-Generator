@@ -4,17 +4,23 @@
 The Fractal CA Generator has been upgraded from an evocative semantic reactor into a rigorous, deterministic, and trajectory-aware **Prompt Compiler**. The system now provides traceable evidence of how prompt concepts evolve into lattice attractors.
 
 ## Key Upgrades
+### 1. BPE Tokenization (Full LLM Alignment)
+- **tiktoken-rs Integration**: Replaced dictionary-based seeding with the GPT-4 `cl100k_base` BPE tokenizer.
+- **Token-Level Provenance**: Every cell now tracks the index of the original BPE token it represents, allowing for exact mapping back to prompt fragments (including sub-word tokens).
+- **Direct Decoding**: Emergent eigenstates are now decoded directly from BPE token IDs, producing high-signal technical and linguistic field translations.
 
-### 1. Deterministic Provenance Tracking
-- **Word-Based Tokenization**: Upgraded from byte-level seeding to word-level seeding. The system now splits prompts into tokens and maps them to a robust 10,000-word dictionary.
-- **Provenance Layer**: Added `source_idx` to the `Cell` struct. Each cell now tracks the index of the original prompt *word* it was seeded with.
-- **Reverse Mapping**: `extract_grounded_attractors()` now performs deduplicated word-level influence mapping, providing a clear link between evolved clusters and prompt concepts.
+### 2. Adaptive Heartbeat (The Dynamic Vitality Mechanism)
+- **Integrated Information Monitoring**: The system now tracks $\Phi$ in real-time.
+- **Surprise-Based Perturbation**: Triggers an "Adaptive Heartbeat" (entropy injection) if the system stalls (flat $\Phi$) or collapses (rapid $\Phi$ decay).
+- **Attractor Breaking**: The heartbeat injects a ripple of phase noise to break deep-attractor locks, keeping the system in a critical "alive" state for longer durations.
 
-### 2. Expanded Semantic Vocabulary
-- **10k Dictionary**: Integrated the `google-10000-english` word list. The system's emergent phase-language (eigenstate) is now significantly more descriptive and high-signal.
-- **Rarity Bias**: The eigenstate extraction now favors "resonant" (rare) words from the latter half of the dictionary when probability density is high, avoiding common stop-words and increasing the signal-to-noise ratio of the field translation.
+### 3. Spatial Semantic Manifolds (Ribbon Topology)
+- **Topological Mapping**: Implemented a "Ribbon Manifold" that projects the 1D prompt sequence into a 2D space.
+- **Locality-Preserving Seeding**: Uses bit-interleaving of BPE token IDs to ensure that conceptually related tokens (which often have proximal IDs) are physically clustered in the lattice.
+- **Narrative Flow Preservation**: The $X$ axis is dedicated to prompt sequence position, while the $Y$ axis represents the semantic vocabulary space.
 
-### 3. Trajectory-Aware Priming
+### 4. Trajectory-Aware Priming
+...
 - **Time-Lapse Profiling**: The `prime` command now captures metrics at multiple iterations (3, 5, 8, 10, 15, 20).
 - **Optimal Window Selection**: The system automatically selects the "best" priming iteration by identifying the peak of **Integrated Information Potential ($\Phi$)** in the pre-thermalization window.
 - **Trend Detection**: Tracks whether $\Phi$ is ascending (integrating) or descending (differentiating) at the point of capture.
