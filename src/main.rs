@@ -553,21 +553,20 @@ impl LatticeState {
         if eigen_tokens.is_empty() {
             "void".to_string()
         } else {
-            // Use cl100k_base's decode but handle errors more gracefully
-            match bpe.decode(&eigen_tokens) {
-                Ok(s) => s.replace("\n", " "),
-                Err(_) => {
-                    // Fallback: decode tokens individually to isolate the error
-                    let mut s = String::new();
-                    for t in eigen_tokens {
-                        if let Ok(piece) = bpe.decode(&[t]) {
-                            s.push_str(&piece.replace("\n", " "));
-                        } else {
-                            s.push_str("[?]");
-                        }
+            let mut s = String::new();
+            for t in eigen_tokens {
+                if let Ok(piece) = bpe.decode(&[t]) {
+                    let cleaned = piece.replace("\n", " ").trim().to_string();
+                    if !cleaned.is_empty() {
+                        s.push_str(&cleaned);
+                        s.push(' ');
                     }
-                    s
                 }
+            }
+            if s.is_empty() {
+                "void".to_string()
+            } else {
+                s.trim().to_string()
             }
         }
     }
@@ -685,6 +684,15 @@ enum Commands {
     DeepTime {
         #[arg(default_value = "Europa Orbital Research Station: Thousand Year Legacy")]
         prompt: String,
+    },
+    Flux {
+        prompt: String,
+        #[arg(short, long, default_value_t = 15)]
+        iterations: u64,
+        #[arg(short, long, default_value_t = 100)]
+        width: usize,
+        #[arg(long, default_value_t = 50)]
+        height: usize,
     },
     ShockTest {
         #[arg(default_value = "Thermodynamic Resilience")]
@@ -810,6 +818,12 @@ async fn main() {
         Some(Commands::Benchmark { samples }) => run_benchmark(samples),
         Some(Commands::SelfTest { prompt }) => run_self_test(&prompt),
         Some(Commands::DeepTime { prompt }) => run_deep_time(&prompt),
+        Some(Commands::Flux {
+            prompt,
+            iterations,
+            width,
+            height,
+        }) => run_flux(&prompt, iterations, width, height),
         Some(Commands::ShockTest { prompt }) => run_shock_test(&prompt),
         Some(Commands::PerturbTest { prompt }) => run_perturb_test(&prompt),
         None => {
@@ -1525,6 +1539,26 @@ fn run_self_prime(
             println!("\nFinal State Snapshot:\n{}", map_text);
         }
     }
+}
+
+fn run_flux(prompt: &str, iterations: u64, width: usize, height: usize) {
+    let mut l = LatticeState::new(width, height, prompt);
+
+    let mut max_phi = -1.0;
+    let mut best_eigenstate = String::new();
+
+    for _ in 1..=iterations {
+        l.step();
+        let m = l.get_metrics();
+
+        if m.phi > max_phi {
+            max_phi = m.phi;
+            best_eigenstate = l.get_semantic_eigenstate();
+        }
+    }
+
+    // Output ONLY the raw eigenstate stream for direct copy-pasting
+    println!("{}", best_eigenstate.trim());
 }
 
 fn run_shock_test(prompt: &str) {
